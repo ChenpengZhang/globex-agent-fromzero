@@ -1,0 +1,65 @@
+import uuid
+
+from fastapi import FastAPI
+
+from app.application.agents.orchestrator import (
+    SubmitIntentInput,
+)
+from app.composition import Container, build_container
+from app.presentation.dto import (
+    SubmitIntentRequest,
+    SubmitIntentResponse,
+)
+
+
+def build_app(
+    container: Container | None = None,
+) -> FastAPI:
+    runtime_container = container or build_container()
+    # Leave space for fake offline container
+
+    api = FastAPI(
+        title="Globex Cross-Border Commerce Agent",
+        version="0.1.0",
+    )
+
+    @api.get("/health")
+    async def health() -> dict:
+        return {
+            "status": "ok",
+        }
+
+    @api.post(
+        "/commerce/intents",
+        response_model=SubmitIntentResponse,
+    )
+    async def submit_intent(
+        body: SubmitIntentRequest,
+    ) -> SubmitIntentResponse:
+        session_id = (
+            body.shopping_session_id
+            or f"session-{uuid.uuid4().hex[:8]}"
+        )
+
+        intent = SubmitIntentInput(
+            shopping_session_id=session_id,
+            buyer_id=body.buyer_id,
+            locale=body.locale,
+            currency=body.currency,
+            raw_query=body.raw_query,
+        )
+
+        result = (
+            await runtime_container.orchestrator.handle_intent(
+                intent,
+            )
+        )
+
+        return SubmitIntentResponse(
+            shopping_session_id=(
+                result.shopping_session_id
+            ),
+            final_text=result.final_text,
+        )
+
+    return api
