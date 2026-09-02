@@ -6,8 +6,9 @@ from fastapi.testclient import TestClient
 from agentscope.message import TextBlock
 from agentscope.model import ChatResponse
 
-from app.application.agents.main_agent import create_main_agent
+from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import MainAgentOrchestrator
+from app.application.agents.session_registry import SessionRegistry
 from app.application.usecases.catalog_search import CatalogSearchUseCase
 from app.composition import Container
 from app.infrastructure.persistence.in_memory_product_repository import (
@@ -39,17 +40,19 @@ def build_test_container(
         build_seed_products(),
     )
     catalog_search = CatalogSearchUseCase(repository)
-    main_agent = create_main_agent(
+    main_agent_factory = MainAgentFactory(
         model=model,
         tools=[],
     )
+    sessions = SessionRegistry(main_agent_factory)
     orchestrator = MainAgentOrchestrator(
-        main_agent=main_agent,
+        sessions=sessions,
     )
 
     return (
         Container(
-            main_agent=main_agent,
+            main_agent_factory=main_agent_factory,
+            sessions=sessions,
             orchestrator=orchestrator,
             product_repository=repository,
             catalog_search=catalog_search,
@@ -140,6 +143,33 @@ def test_submit_intent_preserves_session_and_normalizes_currency() -> None:
     assert "locale: en-US" in content
     assert "currency: USD" in content
     assert "Find travel gear" in content
+
+
+def test_submit_intent_rejects_session_reuse_by_other_buyer() -> None:
+    container, _ = build_test_container()
+
+    with TestClient(build_app(container)) as client:
+        first_response = client.post(
+            "/commerce/intents",
+            json={
+                "shopping_session_id": "session-shared",
+                "buyer_id": "buyer-001",
+                "raw_query": "你好",
+            },
+        )
+
+        second_response = client.post(
+            "/commerce/intents",
+            json={
+                "shopping_session_id": "session-shared",
+                "buyer_id": "buyer-002",
+                "raw_query": "你好",
+            },
+        )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+    assert "已绑定到其他 buyer" in second_response.json()["detail"]
 
 
 @pytest.mark.parametrize(

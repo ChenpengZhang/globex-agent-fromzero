@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
-from agentscope.agent import Agent
+from app.application.agents.session_registry import (
+    SessionRegistry,
+)
+
 from agentscope.message import UserMsg
 
 
@@ -66,14 +69,21 @@ class SubmitIntentOutput:
 class MainAgentOrchestrator:
     def __init__(
         self,
-        main_agent: Agent,
+        sessions: SessionRegistry
     ) -> None:
-        self._main_agent = main_agent
+        self._sessions = sessions
 
     async def handle_intent(
         self,
         intent: SubmitIntentInput,
     ) -> SubmitIntentOutput:
+        session = await self._sessions.get_or_create(
+            shopping_session_id=(
+                intent.shopping_session_id
+            ),
+            buyer_id=intent.buyer_id,
+        )
+
         message_content = (
             "<shopping-context>\n"
             f"locale: {intent.locale}\n"
@@ -87,9 +97,11 @@ class MainAgentOrchestrator:
             content=message_content,
         )
 
-        reply = await self._main_agent.reply(
-            [user_message],
-        )
+        async with session.execution_lock:
+            reply = await session.agent.reply(
+                [user_message],
+            )
+        # avoid two replies using the same session
 
         return SubmitIntentOutput(
             shopping_session_id=(

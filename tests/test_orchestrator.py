@@ -4,12 +4,13 @@ from agentscope.message import TextBlock
 from agentscope.model import ChatResponse
 
 from app.application.agents.main_agent import (
-    create_main_agent,
+    MainAgentFactory,
 )
 from app.application.agents.orchestrator import (
     MainAgentOrchestrator,
     SubmitIntentInput,
 )
+from app.application.agents.session_registry import SessionRegistry
 from tests.fakes import ScriptedChatModel
 
 
@@ -85,13 +86,13 @@ async def test_orchestrator_builds_agent_message() -> None:
         ],
     )
 
-    agent = create_main_agent(
+    factory = MainAgentFactory(
         model=model,
         tools=[],
     )
-
+    sessions = SessionRegistry(factory)
     orchestrator = MainAgentOrchestrator(
-        main_agent=agent,
+        sessions=sessions,
     )
 
     result = await orchestrator.handle_intent(

@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 
-from agentscope.agent import Agent
 from agentscope.tool import FunctionTool
 
-from app.application.agents.main_agent import create_main_agent
+from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import (
     MainAgentOrchestrator,
 )
@@ -12,6 +11,9 @@ from app.application.tools.product_search_tool import (
 )
 from app.application.usecases.catalog_search import (
     CatalogSearchUseCase,
+)
+from app.application.agents.session_registry import (
+    SessionRegistry,
 )
 from app.domain.catalog.ports.product_repository import (
     ProductRepository,
@@ -28,7 +30,8 @@ from app.infrastructure.settings import load_settings
 
 @dataclass
 class Container:
-    main_agent: Agent
+    main_agent_factory: MainAgentFactory
+    sessions: SessionRegistry
     orchestrator: MainAgentOrchestrator
     product_repository: ProductRepository
     catalog_search: CatalogSearchUseCase
@@ -57,19 +60,24 @@ def build_container() -> Container:
 
     model = create_chat_model(settings)
 
-    main_agent = create_main_agent(
+    main_agent_factory = MainAgentFactory(
         model=model,
         tools=[
             product_search_tool,
         ],
     )
 
+    sessions = SessionRegistry(
+        main_agent_factory=main_agent_factory,
+    )
+
     orchestrator = MainAgentOrchestrator(
-        main_agent=main_agent,
+        sessions=sessions,
     )
 
     return Container(
-        main_agent=main_agent,
+        main_agent_factory=main_agent_factory,
+        sessions=sessions,
         orchestrator=orchestrator,
         product_repository=product_repository,
         catalog_search=catalog_search,

@@ -39,3 +39,20 @@ def create_main_agent(
             max_iters=5,
         ),
     )
+
+
+class MainAgentFactory:
+    def __init__(
+        self,
+        model: ChatModelBase,
+        tools: list[FunctionTool],
+    ) -> None:
+        self._model = model
+        self._tools = list(tools)
+
+    def build(self) -> Agent:
+        return create_main_agent(
+            model=self._model,
+            tools=list(self._tools),
+        )
+    

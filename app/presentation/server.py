@@ -1,9 +1,12 @@
 import uuid
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from app.application.agents.orchestrator import (
     SubmitIntentInput,
+)
+from app.application.agents.session_registry import (
+    SessionOwnershipError,
 )
 from app.composition import Container, build_container
 from app.presentation.dto import (
@@ -49,11 +52,17 @@ def build_app(
             raw_query=body.raw_query,
         )
 
-        result = (
-            await runtime_container.orchestrator.handle_intent(
-                intent,
+        try:
+            result = (
+                await runtime_container.orchestrator.handle_intent(
+                    intent,
+                )
             )
-        )
+        except SessionOwnershipError as error:
+            raise HTTPException(
+                status_code=409,
+                detail=str(error),
+            ) from error
 
         return SubmitIntentResponse(
             shopping_session_id=(
