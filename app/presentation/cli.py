@@ -1,7 +1,8 @@
 import asyncio
 
-from agentscope.message import UserMsg
-
+from app.application.agents.orchestrator import (
+    SubmitIntentInput,
+)
 from app.composition import build_container
 
 
@@ -13,13 +14,21 @@ async def main() -> None:
         print("请输入查询内容")
         return
 
-    user_message = UserMsg(name = "buyer", content = raw_query)
+    intent = SubmitIntentInput(
+        shopping_session_id="cli-session",
+        buyer_id="cli-buyer",
+        locale="zh-CN",
+        currency="CNY",
+        raw_query=raw_query,
+    )
 
-    reply = await container.main_agent.reply([user_message])
+    result = await container.orchestrator.handle_intent(
+        intent,
+    )
 
-    final_text = reply.get_text_content() or ""
-    print(f"Globex: {final_text}")
+    print(f"Globex: {result.final_text}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+    

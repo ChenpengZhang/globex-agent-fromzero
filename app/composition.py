@@ -4,6 +4,9 @@ from agentscope.agent import Agent
 from agentscope.tool import FunctionTool
 
 from app.application.agents.main_agent import create_main_agent
+from app.application.agents.orchestrator import (
+    MainAgentOrchestrator,
+)
 from app.application.tools.product_search_tool import (
     build_product_search_tool,
 )
@@ -26,6 +29,7 @@ from app.infrastructure.settings import load_settings
 @dataclass
 class Container:
     main_agent: Agent
+    orchestrator: MainAgentOrchestrator
     product_repository: ProductRepository
     catalog_search: CatalogSearchUseCase
     # The container is the only place where it knows every module
@@ -60,8 +64,13 @@ def build_container() -> Container:
         ],
     )
 
+    orchestrator = MainAgentOrchestrator(
+        main_agent=main_agent,
+    )
+
     return Container(
         main_agent=main_agent,
+        orchestrator=orchestrator,
         product_repository=product_repository,
         catalog_search=catalog_search,
     )
