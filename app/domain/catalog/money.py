@@ -31,3 +31,27 @@ class Money:
     def to_major_units(self) -> Decimal:
         """From minor units (which is cents) to decimal amount"""
         return Decimal(self.amount_minor) / Decimal("100")
+
+    def add(self, other: "Money") -> "Money":
+        if self.currency != other.currency:
+            raise ValueError(
+                f"不能将不同币种的金额相加: {self.currency} != {other.currency}"
+            )
+
+        return Money(
+            amount_minor=self.amount_minor + other.amount_minor,
+            currency=self.currency,
+        )
+
+    def multiply(self, quantity: int) -> "Money":
+        if (
+            not isinstance(quantity, int)
+            or isinstance(quantity, bool)
+            or quantity < 0
+        ):
+            raise ValueError("金额只能乘以非负整数")
+
+        return Money(
+            amount_minor=self.amount_minor * quantity,
+            currency=self.currency,
+        )
