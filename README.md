@@ -64,7 +64,7 @@ ProductRepository
 InMemoryProductRepository
 ```
 
-The Order Domain currently contains:
+The order side currently contains:
 
 ```text
 Order aggregate
@@ -74,6 +74,10 @@ Order aggregate
         └── Money (monetary operations)
 
 OrderRepository (Domain port)
+    ↓
+InMemoryOrderRepository + Application DTOs
+    ↓
+Place / Query / Cancel Order UseCases
 ```
 
 ## Current Capabilities
@@ -86,9 +90,10 @@ OrderRepository (Domain port)
 - FastAPI HTTP boundary.
 - Session-scoped AgentState isolation and buyer binding.
 - Address, OrderLine, Order state machine, and OrderRepository port.
+- Deterministic place/query/cancel flows with inventory compensation.
 - Offline tests for Domain, UseCases, Tools, HTTP, and sessions.
 
-The current suite contains 79 passing tests.
+The current suite contains 142 passing tests.
 
 ## Setup
 
@@ -134,8 +139,8 @@ Do not commit real API keys or other secrets.
 | 6. HTTP API | Complete | FastAPI DTOs, app factory, error boundary |
 | 7. Multi-Session Isolation | Complete | Agent factory, session registry, buyer binding, locks |
 | 8. Order Domain | Complete | Address, OrderLine, Order state machine, repository port |
-| 9. Order Transaction Flow | Current | Inventory compensation, repository adapter, order UseCases |
-| 10. Order Agent Tools | Planned | Transaction tools and end-to-end Agent integration |
+| 9. Order Transaction Flow | Complete | Inventory compensation, repository adapter, order UseCases |
+| 10. Order Agent Tools | Current | Transaction tools and end-to-end Agent integration |
 | 11. Sub-Agents | Planned | SearchAgent, TradeAgent, task dispatch and isolation |
 | 12–13. RAG and Tiered Retrieval | Planned | Knowledge retrieval, embeddings, reranking, fallbacks |
 | 14. Realtime Events | Planned | Typed events, streaming, WebSocket delivery |

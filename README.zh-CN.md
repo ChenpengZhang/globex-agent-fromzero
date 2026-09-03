@@ -64,7 +64,7 @@ ProductRepository
 InMemoryProductRepository
 ```
 
-当前订单 Domain：
+当前订单侧：
 
 ```text
 Order 聚合
@@ -74,6 +74,10 @@ Order 聚合
         └── Money（金额运算）
 
 OrderRepository（Domain 端口）
+    ↓
+InMemoryOrderRepository + Application DTO
+    ↓
+下单 / 查询 / 取消订单 UseCase
 ```
 
 ## 当前能力
@@ -86,9 +90,10 @@ OrderRepository（Domain 端口）
 - FastAPI HTTP 边界。
 - 基于 session 的 AgentState 隔离与 buyer 绑定。
 - Address、OrderLine、Order 状态机和 OrderRepository 端口。
+- 包含库存补偿的确定性下单、查询和取消流程。
 - Domain、UseCase、Tool、HTTP 和会话的离线测试。
 
-当前共有 79 项测试通过。
+当前共有 142 项测试通过。
 
 ## 启动方式
 
@@ -134,8 +139,8 @@ uv run pytest
 | 6. HTTP API | 已完成 | FastAPI DTO、应用工厂、错误边界 |
 | 7. 多会话隔离 | 已完成 | Agent Factory、SessionRegistry、buyer 绑定和并发锁 |
 | 8. 订单 Domain | 已完成 | Address、OrderLine、Order 状态机和仓储端口 |
-| 9. 订单交易闭环 | 当前章节 | 库存补偿、仓储适配器和订单 UseCase |
-| 10. 订单 Agent Tools | 计划中 | 交易工具和 Agent 端到端集成 |
+| 9. 订单交易闭环 | 已完成 | 库存补偿、仓储适配器和订单 UseCase |
+| 10. 订单 Agent Tools | 当前章节 | 交易工具和 Agent 端到端集成 |
 | 11. 子 Agent | 计划中 | SearchAgent、TradeAgent、任务派发和隔离 |
 | 12–13. RAG 与分级检索 | 计划中 | 知识检索、Embedding、Rerank 和降级链 |
 | 14. 实时事件 | 计划中 | 类型化事件、流式回复和 WebSocket 推送 |

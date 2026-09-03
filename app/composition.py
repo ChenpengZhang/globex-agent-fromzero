@@ -12,11 +12,23 @@ from app.application.tools.product_search_tool import (
 from app.application.usecases.catalog_search import (
     CatalogSearchUseCase,
 )
+from app.application.usecases.cancel_order import (
+    CancelOrderUseCase,
+)
+from app.application.usecases.place_order import (
+    PlaceOrderUseCase,
+)
+from app.application.usecases.query_order import (
+    QueryOrderUseCase,
+)
 from app.application.agents.session_registry import (
     SessionRegistry,
 )
 from app.domain.catalog.ports.product_repository import (
     ProductRepository,
+)
+from app.domain.order.ports.order_repository import (
+    OrderRepository,
 )
 from app.infrastructure.llm import create_chat_model
 from app.infrastructure.persistence.in_memory_product_repository import (
@@ -24,6 +36,9 @@ from app.infrastructure.persistence.in_memory_product_repository import (
 )
 from app.infrastructure.persistence.seed_products import (
     build_seed_products,
+)
+from app.infrastructure.persistence.in_memory_order_repository import (
+    InMemoryOrderRepository,
 )
 from app.infrastructure.settings import load_settings
 
@@ -33,8 +48,14 @@ class Container:
     main_agent_factory: MainAgentFactory
     sessions: SessionRegistry
     orchestrator: MainAgentOrchestrator
+
     product_repository: ProductRepository
+    order_repository: OrderRepository
+
     catalog_search: CatalogSearchUseCase
+    place_order: PlaceOrderUseCase
+    query_order: QueryOrderUseCase
+    cancel_order: CancelOrderUseCase
     # The container is the only place where it knows every module
 
 
@@ -47,6 +68,22 @@ def build_container() -> Container:
 
     catalog_search = CatalogSearchUseCase(
         product_repository,
+    )
+
+    order_repository = InMemoryOrderRepository()
+
+    place_order = PlaceOrderUseCase(
+        product_repository=product_repository,
+        order_repository=order_repository,
+    )
+
+    query_order = QueryOrderUseCase(
+        order_repository=order_repository,
+    )
+
+    cancel_order = CancelOrderUseCase(
+        product_repository=product_repository,
+        order_repository=order_repository,
     )
 
     product_search_function = build_product_search_tool(
@@ -80,5 +117,9 @@ def build_container() -> Container:
         sessions=sessions,
         orchestrator=orchestrator,
         product_repository=product_repository,
+        order_repository=order_repository,
         catalog_search=catalog_search,
+        place_order=place_order,
+        query_order=query_order,
+        cancel_order=cancel_order,
     )

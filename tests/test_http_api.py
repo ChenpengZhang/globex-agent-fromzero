@@ -9,8 +9,14 @@ from agentscope.model import ChatResponse
 from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import MainAgentOrchestrator
 from app.application.agents.session_registry import SessionRegistry
+from app.application.usecases.cancel_order import CancelOrderUseCase
 from app.application.usecases.catalog_search import CatalogSearchUseCase
+from app.application.usecases.place_order import PlaceOrderUseCase
+from app.application.usecases.query_order import QueryOrderUseCase
 from app.composition import Container
+from app.infrastructure.persistence.in_memory_order_repository import (
+    InMemoryOrderRepository,
+)
 from app.infrastructure.persistence.in_memory_product_repository import (
     InMemoryProductRepository,
 )
@@ -40,6 +46,10 @@ def build_test_container(
         build_seed_products(),
     )
     catalog_search = CatalogSearchUseCase(repository)
+    order_repository = InMemoryOrderRepository()
+    place_order = PlaceOrderUseCase(repository, order_repository)
+    query_order = QueryOrderUseCase(order_repository)
+    cancel_order = CancelOrderUseCase(repository, order_repository)
     main_agent_factory = MainAgentFactory(
         model=model,
         tools=[],
@@ -55,7 +65,11 @@ def build_test_container(
             sessions=sessions,
             orchestrator=orchestrator,
             product_repository=repository,
+            order_repository=order_repository,
             catalog_search=catalog_search,
+            place_order=place_order,
+            query_order=query_order,
+            cancel_order=cancel_order,
         ),
         model,
     )

@@ -15,6 +15,12 @@ class InMemoryProductRepository(ProductRepository):
     async def list_all(self) -> list[Product]:
         return list(self._products.values())
 
+    async def find_by_id(
+        self,
+        product_id: str,
+    ) -> Product | None:
+        return self._products.get(product_id)
+
     async def find_by_ids(
         self,
         product_ids: list[str],

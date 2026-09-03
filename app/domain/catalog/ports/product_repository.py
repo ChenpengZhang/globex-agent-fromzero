@@ -14,4 +14,10 @@ class ProductRepository(ABC):
         product_ids: list[str],
     ) -> list[Product]:
         """returns listed products by ids."""
-        
+
+    @abstractmethod
+    async def find_by_id(
+        self,
+        product_id: str,
+    ) -> Product | None:
+        """Return one product by ID."""

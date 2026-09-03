@@ -27,6 +27,21 @@ class Product:
     def primary_sku(self) -> Sku:
         return self.skus[0]
 
+    def find_sku(
+        self,
+        sku_id: str,
+    ) -> Sku | None:
+        normalized_sku_id = sku_id.strip()
+
+        if not normalized_sku_id:
+            return None
+
+        for sku in self.skus:
+            if sku.sku_id == normalized_sku_id:
+                return sku
+
+        return None
+
     def searchable_text(self) -> str:
         sku_specs = " ".join(sku.spec for sku in self.skus)
 
