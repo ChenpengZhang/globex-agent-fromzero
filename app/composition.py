@@ -9,6 +9,11 @@ from app.application.agents.orchestrator import (
 from app.application.tools.product_search_tool import (
     build_product_search_tool,
 )
+from app.application.tools.order_tools import (
+    build_cancel_order_tool,
+    build_place_order_tool,
+    build_query_order_tool,
+)
 from app.application.usecases.catalog_search import (
     CatalogSearchUseCase,
 )
@@ -90,9 +95,32 @@ def build_container() -> Container:
         catalog_search,
     )
 
+    place_order_function = build_place_order_tool(
+        place_order,
+    )
+    query_order_function = build_query_order_tool(
+        query_order,
+    )
+    cancel_order_function = build_cancel_order_tool(
+        cancel_order,
+    )
+
     product_search_tool = FunctionTool(
         product_search_function,
         is_read_only=True,
+    )
+
+    place_order_tool = FunctionTool(
+        place_order_function,
+        is_read_only=False,
+    )
+    query_order_tool = FunctionTool(
+        query_order_function,
+        is_read_only=True,
+    )
+    cancel_order_tool = FunctionTool(
+        cancel_order_function,
+        is_read_only=False,
     )
 
     model = create_chat_model(settings)
@@ -101,6 +129,9 @@ def build_container() -> Container:
         model=model,
         tools=[
             product_search_tool,
+            place_order_tool,
+            query_order_tool,
+            cancel_order_tool,   
         ],
     )
 

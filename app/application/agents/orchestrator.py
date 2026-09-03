@@ -4,6 +4,11 @@ from app.application.agents.session_registry import (
     SessionRegistry,
 )
 
+from app.infrastructure.context import (
+    ShoppingContext,
+    ShoppingContextSnapshot,
+)
+
 from agentscope.message import UserMsg
 
 
@@ -97,11 +102,29 @@ class MainAgentOrchestrator:
             content=message_content,
         )
 
+        snapshot = ShoppingContextSnapshot(
+            shopping_session_id=(
+                intent.shopping_session_id
+            ),
+            buyer_id=intent.buyer_id,
+            locale=intent.locale,
+            currency=intent.currency,
+        )
+
         async with session.execution_lock:
-            reply = await session.agent.reply(
-                [user_message],
-            )
-        # avoid two replies using the same session
+            # avoid two replies using the same session
+            reset_token = ShoppingContext.set(snapshot)
+            # This token is used to recover ContextVar
+            # incase of recursive calls clears out all contexts
+            # make sure use the token to clear the ShoppingContext
+
+            try:
+                reply = await session.agent.reply(
+                    [user_message],
+                )
+            finally:
+                ShoppingContext.reset(reset_token)
+
 
         return SubmitIntentOutput(
             shopping_session_id=(
