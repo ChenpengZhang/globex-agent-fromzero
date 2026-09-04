@@ -6,13 +6,14 @@ from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import (
     MainAgentOrchestrator,
 )
-from app.application.tools.product_search_tool import (
-    build_product_search_tool,
+from app.application.agents.search_agent import (
+    SearchAgentFactory,
 )
-from app.application.tools.order_tools import (
-    build_cancel_order_tool,
-    build_place_order_tool,
-    build_query_order_tool,
+from app.application.agents.trade_agent import (
+    TradeAgentFactory,
+)
+from app.application.tools.task_dispatch_tool import (
+    build_task_dispatch_tool,
 )
 from app.application.usecases.catalog_search import (
     CatalogSearchUseCase,
@@ -51,6 +52,8 @@ from app.infrastructure.settings import load_settings
 @dataclass
 class Container:
     main_agent_factory: MainAgentFactory
+    search_agent_factory: SearchAgentFactory
+    trade_agent_factory: TradeAgentFactory
     sessions: SessionRegistry
     orchestrator: MainAgentOrchestrator
 
@@ -91,47 +94,36 @@ def build_container() -> Container:
         order_repository=order_repository,
     )
 
-    product_search_function = build_product_search_tool(
-        catalog_search,
-    )
-
-    place_order_function = build_place_order_tool(
-        place_order,
-    )
-    query_order_function = build_query_order_tool(
-        query_order,
-    )
-    cancel_order_function = build_cancel_order_tool(
-        cancel_order,
-    )
-
-    product_search_tool = FunctionTool(
-        product_search_function,
-        is_read_only=True,
-    )
-
-    place_order_tool = FunctionTool(
-        place_order_function,
-        is_read_only=False,
-    )
-    query_order_tool = FunctionTool(
-        query_order_function,
-        is_read_only=True,
-    )
-    cancel_order_tool = FunctionTool(
-        cancel_order_function,
-        is_read_only=False,
-    )
-
     model = create_chat_model(settings)
+
+    search_agent_factory = SearchAgentFactory(
+        model=model,
+        catalog_search=catalog_search,
+    )
+
+    trade_agent_factory = TradeAgentFactory(
+        model=model,
+        place_order=place_order,
+        query_order=query_order,
+        cancel_order=cancel_order,
+    )
+
+    task_dispatch_function = build_task_dispatch_tool(
+        search_factory=search_agent_factory,
+        trade_factory=trade_agent_factory,
+    )
+
+    task_dispatch_tool = FunctionTool(
+        task_dispatch_function,
+        is_read_only=False,
+    )
 
     main_agent_factory = MainAgentFactory(
         model=model,
         tools=[
-            product_search_tool,
-            place_order_tool,
-            query_order_tool,
-            cancel_order_tool,   
+            *search_agent_factory.build_tools(),
+            *trade_agent_factory.build_tools(),
+            task_dispatch_tool,
         ],
     )
 
@@ -145,6 +137,8 @@ def build_container() -> Container:
 
     return Container(
         main_agent_factory=main_agent_factory,
+        search_agent_factory=search_agent_factory,
+        trade_agent_factory=trade_agent_factory,
         sessions=sessions,
         orchestrator=orchestrator,
         product_repository=product_repository,

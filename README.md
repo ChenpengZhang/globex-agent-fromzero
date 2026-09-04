@@ -92,9 +92,10 @@ Place / Query / Cancel Order UseCases
 - Address, OrderLine, Order state machine, and OrderRepository port.
 - Deterministic place/query/cancel flows with inventory compensation.
 - Request-scoped ShoppingContext and order Agent Tools.
+- SearchAgent, TradeAgent, and context-isolated task dispatch.
 - Offline tests for Domain, UseCases, Tools, HTTP, and sessions.
 
-The current suite contains 152 passing tests.
+The current suite contains 160 passing tests.
 
 ## Setup
 
@@ -142,8 +143,8 @@ Do not commit real API keys or other secrets.
 | 8. Order Domain | Complete | Address, OrderLine, Order state machine, repository port |
 | 9. Order Transaction Flow | Complete | Inventory compensation, repository adapter, order UseCases |
 | 10. Order Agent Tools | Complete | Transaction tools and end-to-end Agent integration |
-| 11. Sub-Agents | Current | SearchAgent, TradeAgent, task dispatch and isolation |
-| 12–13. RAG and Tiered Retrieval | Planned | Knowledge retrieval, embeddings, reranking, fallbacks |
+| 11. Sub-Agents | Complete | SearchAgent, TradeAgent, task dispatch and isolation |
+| 12–13. RAG and Tiered Retrieval | Current | Knowledge retrieval, embeddings, reranking, fallbacks |
 | 14. Realtime Events | Planned | Typed events, streaming, WebSocket delivery |
 | 15. Frontend | Planned | React chat, product/order cards, event timeline |
 | 16. Persistence and Memory | Planned | SQLite, session recovery, conversations, preferences |

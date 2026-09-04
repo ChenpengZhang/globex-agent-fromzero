@@ -8,6 +8,7 @@ from agentscope.permission import (
 _AUTO_ALLOWED_BUSINESS_TOOLS = (
     "place_order_tool",
     "cancel_order_tool",
+    "task_dispatch",
 )
 
 

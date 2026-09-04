@@ -181,6 +181,7 @@ async def test_agent_places_queries_and_cancels_order_in_one_session(
         "place_order_tool",
         "query_order_tool",
         "cancel_order_tool",
+        "task_dispatch",
     }
 
     place_results = collect_tool_result_texts(

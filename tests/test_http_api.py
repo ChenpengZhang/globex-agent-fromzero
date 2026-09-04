@@ -8,7 +8,9 @@ from agentscope.model import ChatResponse
 
 from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import MainAgentOrchestrator
+from app.application.agents.search_agent import SearchAgentFactory
 from app.application.agents.session_registry import SessionRegistry
+from app.application.agents.trade_agent import TradeAgentFactory
 from app.application.usecases.cancel_order import CancelOrderUseCase
 from app.application.usecases.catalog_search import CatalogSearchUseCase
 from app.application.usecases.place_order import PlaceOrderUseCase
@@ -54,6 +56,16 @@ def build_test_container(
         model=model,
         tools=[],
     )
+    search_agent_factory = SearchAgentFactory(
+        model=model,
+        catalog_search=catalog_search,
+    )
+    trade_agent_factory = TradeAgentFactory(
+        model=model,
+        place_order=place_order,
+        query_order=query_order,
+        cancel_order=cancel_order,
+    )
     sessions = SessionRegistry(main_agent_factory)
     orchestrator = MainAgentOrchestrator(
         sessions=sessions,
@@ -62,6 +74,8 @@ def build_test_container(
     return (
         Container(
             main_agent_factory=main_agent_factory,
+            search_agent_factory=search_agent_factory,
+            trade_agent_factory=trade_agent_factory,
             sessions=sessions,
             orchestrator=orchestrator,
             product_repository=repository,
