@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
 
 from app.application.agents.orchestrator import (
     SubmitIntentInput,
@@ -21,9 +22,19 @@ def build_app(
     runtime_container = container or build_container()
     # Leave space for fake offline container
 
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        await runtime_container.startup()
+
+        try:
+            yield
+        finally:
+            await runtime_container.shutdown()
+
     api = FastAPI(
         title="Globex Cross-Border Commerce Agent",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     @api.get("/health")

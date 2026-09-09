@@ -3,12 +3,12 @@ import asyncio
 from app.application.agents.orchestrator import (
     SubmitIntentInput,
 )
-from app.composition import build_container
+from app.composition import Container, build_container
 
 
-async def main() -> None:
-    container = build_container()
-
+async def run_conversation(
+    container: Container,
+) -> None:
     shopping_session_id = "cli-session"
     buyer_id = "cli-buyer"
 
@@ -27,7 +27,6 @@ async def main() -> None:
 
         print(f"\nGlobex：{result.final_text}\n")
 
-    # 先让真实模型主动开始会话。
     await talk_to_agent(
         "一个新的购物会话已经开始。"
         "请向顾客打招呼，并只询问顾客想购买什么。"
@@ -52,6 +51,15 @@ async def main() -> None:
         await talk_to_agent(raw_query)
 
 
+async def main() -> None:
+    container = build_container()
+    await container.startup()
+
+    try:
+        await run_conversation(container)
+    finally:
+        await container.shutdown()
+
+
 if __name__ == "__main__":
     asyncio.run(main())
-    

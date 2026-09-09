@@ -24,7 +24,7 @@ from app.infrastructure.persistence.in_memory_product_repository import (
 )
 from app.infrastructure.persistence.seed_products import build_seed_products
 from app.presentation.server import build_app
-from tests.fakes import ScriptedChatModel
+from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
 
 
 def build_test_container(
@@ -52,6 +52,7 @@ def build_test_container(
     place_order = PlaceOrderUseCase(repository, order_repository)
     query_order = QueryOrderUseCase(order_repository)
     cancel_order = CancelOrderUseCase(repository, order_repository)
+    knowledge_base = EmptyKnowledgeBase()
     main_agent_factory = MainAgentFactory(
         model=model,
         tools=[],
@@ -59,6 +60,7 @@ def build_test_container(
     search_agent_factory = SearchAgentFactory(
         model=model,
         catalog_search=catalog_search,
+        knowledge_base=knowledge_base,  # type: ignore[arg-type]
     )
     trade_agent_factory = TradeAgentFactory(
         model=model,
@@ -76,6 +78,7 @@ def build_test_container(
             main_agent_factory=main_agent_factory,
             search_agent_factory=search_agent_factory,
             trade_agent_factory=trade_agent_factory,
+            knowledge_base=knowledge_base,  # type: ignore[arg-type]
             sessions=sessions,
             orchestrator=orchestrator,
             product_repository=repository,
@@ -97,6 +100,24 @@ def test_health_endpoint() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_app_lifespan_starts_and_stops_knowledge_store() -> None:
+    container, _ = build_test_container()
+    knowledge_base = container.knowledge_base
+    vector_store = knowledge_base.vector_store
+
+    assert vector_store.enter_count == 0
+    assert vector_store.exit_count == 0
+
+    with TestClient(build_app(container)) as client:
+        assert client.get("/health").status_code == 200
+        assert vector_store.enter_count == 1
+        assert vector_store.exit_count == 0
+        assert knowledge_base.ensure_collection_count == 1
+        assert knowledge_base.document_ids == ["travel-gear"]
+
+    assert vector_store.exit_count == 1
 
 
 def test_submit_intent_generates_session_and_uses_defaults() -> None:

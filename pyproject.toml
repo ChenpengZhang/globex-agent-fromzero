@@ -7,6 +7,7 @@ dependencies = [
     "agentscope>=2,<3",
     "fastapi>=0.141.1",
     "python-dotenv>=1.2",
+    "qdrant-client>=1.19.0",
     "uvicorn[standard]>=0.52.4",
 ]
 

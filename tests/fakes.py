@@ -1,4 +1,5 @@
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any
 
 from pydantic import BaseModel
@@ -8,6 +9,61 @@ from agentscope.formatter import OpenAIChatFormatter
 from agentscope.message import Msg
 from agentscope.model import ChatModelBase, ChatResponse
 from agentscope.tool import ToolChoice
+
+
+class RecordingVectorStore:
+    """Minimal async lifecycle double for a vector store."""
+
+    def __init__(self) -> None:
+        self.enter_count = 0
+        self.exit_count = 0
+
+    async def __aenter__(self):
+        self.enter_count += 1
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type,
+        exc_value,
+        traceback,
+    ) -> None:
+        self.exit_count += 1
+
+
+class EmptyKnowledgeBase:
+    """KnowledgeBase test double with lifecycle and no search hits."""
+
+    def __init__(self) -> None:
+        self.vector_store = RecordingVectorStore()
+        self.document_ids: list[str] = []
+        self.ensure_collection_count = 0
+
+    async def ensure_collection(self) -> None:
+        self.ensure_collection_count += 1
+
+    async def list_documents(self) -> list:
+        return [
+            SimpleNamespace(document_id=document_id)
+            for document_id in self.document_ids
+        ]
+
+    async def insert_document(
+        self,
+        *,
+        chunks,
+        document_id: str,
+        document_metadata: dict,
+    ) -> str:
+        self.document_ids.append(document_id)
+        return document_id
+
+    async def search(
+        self,
+        queries: list[str],
+        top_k: int = 5,
+    ) -> list:
+        return []
 
 
 class ScriptedChatModel(ChatModelBase):

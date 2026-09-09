@@ -8,7 +8,7 @@ from app.application.dto.order import (
     QueryOrderInput,
 )
 from app.domain.order.address import Address
-from tests.fakes import ScriptedChatModel
+from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
 
 
 @pytest.mark.asyncio
@@ -25,6 +25,11 @@ async def test_container_shares_repositories_across_order_use_cases(
         composition,
         "create_chat_model",
         lambda settings: model,
+    )
+    monkeypatch.setattr(
+        composition,
+        "build_category_knowledge_base",
+        lambda settings: EmptyKnowledgeBase(),
     )
     container = composition.build_container()
 

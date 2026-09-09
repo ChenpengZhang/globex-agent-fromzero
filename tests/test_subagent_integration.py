@@ -15,7 +15,7 @@ from app.application.agents.orchestrator import (
 )
 from app.domain.order.order import OrderStatus
 from app.infrastructure.context import ShoppingContext
-from tests.fakes import ScriptedChatModel
+from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
 
 
 def tool_call_response(
@@ -120,6 +120,11 @@ async def test_main_agent_dispatches_isolated_search_agent(
         "create_chat_model",
         lambda settings: model,
     )
+    monkeypatch.setattr(
+        composition,
+        "build_category_knowledge_base",
+        lambda settings: EmptyKnowledgeBase(),
+    )
     container = composition.build_container()
 
     reply = await container.orchestrator.handle_intent(
@@ -149,6 +154,7 @@ async def test_main_agent_dispatches_isolated_search_agent(
         "place_order_tool",
         "query_order_tool",
         "cancel_order_tool",
+        "category_insight_tool",
         "task_dispatch",
     }
 
@@ -158,6 +164,7 @@ async def test_main_agent_dispatches_isolated_search_agent(
     }
     assert specialist_tool_names == {
         "product_search_tool",
+        "category_insight_tool",
     }
 
     specialist_results = collect_tool_result_texts(
@@ -240,6 +247,11 @@ async def test_trade_agent_dispatch_preserves_buyer_context(
         composition,
         "create_chat_model",
         lambda settings: model,
+    )
+    monkeypatch.setattr(
+        composition,
+        "build_category_knowledge_base",
+        lambda settings: EmptyKnowledgeBase(),
     )
     container = composition.build_container()
 

@@ -64,6 +64,16 @@ ProductRepository
 InMemoryProductRepository
 ```
 
+品类知识 RAG 链路：
+
+```text
+Markdown 知识 → 切分 → embedding → Qdrant
+                                  ↑
+用户 → Agent → category_insight_tool → 问题 embedding
+                                     ↓
+                         content + source + score
+```
+
 当前订单侧：
 
 ```text
@@ -93,9 +103,11 @@ InMemoryOrderRepository + Application DTO
 - 包含库存补偿的确定性下单、查询和取消流程。
 - 请求级 ShoppingContext 和订单 Agent Tools。
 - SearchAgent、TradeAgent 和上下文隔离的任务派发。
-- Domain、UseCase、Tool、HTTP 和会话的离线测试。
+- 基于 Markdown 切分和 Qdrant 的品类知识 RAG。
+- 选购知识与具体商品事实的显式边界。
+- Domain、UseCase、Tool、RAG、HTTP 和会话的离线测试。
 
-当前共有 160 项测试通过。
+当前共有 172 项测试通过。
 
 ## 启动方式
 
@@ -107,6 +119,14 @@ InMemoryOrderRepository + Application DTO
 export LLM_BASE_URL=<OpenAI-compatible endpoint>
 export LLM_API_KEY=<api key>
 export LLM_MODEL=<model name>
+```
+
+配置 OpenAI-compatible embedding 模型。未单独提供 embedding
+服务配置时，会复用 LLM 的 endpoint 和 API key：
+
+```bash
+export EMBEDDING_MODEL=<embedding model name>
+export EMBEDDING_DIM=<vector dimensions>
 ```
 
 启动 CLI：
@@ -144,7 +164,8 @@ uv run pytest
 | 9. 订单交易闭环 | 已完成 | 库存补偿、仓储适配器和订单 UseCase |
 | 10. 订单 Agent Tools | 已完成 | 交易工具和 Agent 端到端集成 |
 | 11. 子 Agent | 已完成 | SearchAgent、TradeAgent、任务派发和隔离 |
-| 12–13. RAG 与分级检索 | 当前章节 | 知识检索、Embedding、Rerank 和降级链 |
+| 12. 品类知识 RAG | 已完成 | Markdown 导入、Embedding、Qdrant 和知识工具 |
+| 13. 商品分级检索 | 当前章节 | 商品 Embedding、Rerank 和显式降级链 |
 | 14. 实时事件 | 计划中 | 类型化事件、流式回复和 WebSocket 推送 |
 | 15. 前端 | 计划中 | React 对话、商品/订单卡和事件时间线 |
 | 16. 持久化与记忆 | 计划中 | SQLite、会话恢复、对话和偏好 |

@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 
 from agentscope.tool import FunctionTool
+from agentscope.rag import KnowledgeBase
 
+from app.infrastructure.rag.category_knowledge import (
+    bootstrap_category_knowledge,
+    build_category_knowledge_base,
+)
 from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import (
     MainAgentOrchestrator,
@@ -59,6 +64,7 @@ class Container:
 
     product_repository: ProductRepository
     order_repository: OrderRepository
+    knowledge_base: KnowledgeBase
 
     catalog_search: CatalogSearchUseCase
     place_order: PlaceOrderUseCase
@@ -66,9 +72,25 @@ class Container:
     cancel_order: CancelOrderUseCase
     # The container is the only place where it knows every module
 
+    async def startup(self) -> None:
+        """Initialize external resources and searchable data."""
+        await self.knowledge_base.vector_store.__aenter__()
+
+        await bootstrap_category_knowledge(
+            self.knowledge_base,
+        )
+
+    async def shutdown(self) -> None:
+        """Release external resources."""
+        await self.knowledge_base.vector_store.__aexit__(None, None, None)
+
 
 def build_container() -> Container:
     settings = load_settings()
+
+    knowledge_base = build_category_knowledge_base(
+        settings,
+    )
 
     product_repository = InMemoryProductRepository(
         build_seed_products(),
@@ -99,6 +121,7 @@ def build_container() -> Container:
     search_agent_factory = SearchAgentFactory(
         model=model,
         catalog_search=catalog_search,
+        knowledge_base=knowledge_base,
     )
 
     trade_agent_factory = TradeAgentFactory(
@@ -139,6 +162,7 @@ def build_container() -> Container:
         main_agent_factory=main_agent_factory,
         search_agent_factory=search_agent_factory,
         trade_agent_factory=trade_agent_factory,
+        knowledge_base=knowledge_base,
         sessions=sessions,
         orchestrator=orchestrator,
         product_repository=product_repository,

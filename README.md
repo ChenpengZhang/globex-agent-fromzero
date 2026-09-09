@@ -64,6 +64,16 @@ ProductRepository
 InMemoryProductRepository
 ```
 
+The category-knowledge RAG path is:
+
+```text
+Markdown knowledge → chunking → embedding → Qdrant
+                                           ↑
+User → Agent → category_insight_tool → query embedding
+                                      ↓
+                         content + source + score
+```
+
 The order side currently contains:
 
 ```text
@@ -93,9 +103,11 @@ Place / Query / Cancel Order UseCases
 - Deterministic place/query/cancel flows with inventory compensation.
 - Request-scoped ShoppingContext and order Agent Tools.
 - SearchAgent, TradeAgent, and context-isolated task dispatch.
-- Offline tests for Domain, UseCases, Tools, HTTP, and sessions.
+- Category-knowledge RAG with Markdown chunking and Qdrant.
+- Explicit separation between selection knowledge and product facts.
+- Offline tests for Domain, UseCases, Tools, RAG, HTTP, and sessions.
 
-The current suite contains 160 passing tests.
+The current suite contains 172 passing tests.
 
 ## Setup
 
@@ -107,6 +119,14 @@ Configure an OpenAI-compatible model endpoint:
 export LLM_BASE_URL=<OpenAI-compatible endpoint>
 export LLM_API_KEY=<api key>
 export LLM_MODEL=<model name>
+```
+
+Configure an OpenAI-compatible embedding model. It reuses the LLM
+endpoint and key unless separate embedding credentials are provided:
+
+```bash
+export EMBEDDING_MODEL=<embedding model name>
+export EMBEDDING_DIM=<vector dimensions>
 ```
 
 Run the CLI:
@@ -144,7 +164,8 @@ Do not commit real API keys or other secrets.
 | 9. Order Transaction Flow | Complete | Inventory compensation, repository adapter, order UseCases |
 | 10. Order Agent Tools | Complete | Transaction tools and end-to-end Agent integration |
 | 11. Sub-Agents | Complete | SearchAgent, TradeAgent, task dispatch and isolation |
-| 12–13. RAG and Tiered Retrieval | Current | Knowledge retrieval, embeddings, reranking, fallbacks |
+| 12. Category-Knowledge RAG | Complete | Markdown ingestion, embeddings, Qdrant, knowledge tool |
+| 13. Tiered Product Retrieval | Current | Product embeddings, reranking, explicit fallbacks |
 | 14. Realtime Events | Planned | Typed events, streaming, WebSocket delivery |
 | 15. Frontend | Planned | React chat, product/order cards, event timeline |
 | 16. Persistence and Memory | Planned | SQLite, session recovery, conversations, preferences |

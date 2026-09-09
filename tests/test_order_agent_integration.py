@@ -13,7 +13,7 @@ import app.composition as composition
 from app.application.agents.orchestrator import SubmitIntentInput
 from app.domain.order.order import OrderStatus
 from app.infrastructure.context import ShoppingContext
-from tests.fakes import ScriptedChatModel
+from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
 
 
 def tool_call_response(
@@ -125,6 +125,11 @@ async def test_agent_places_queries_and_cancels_order_in_one_session(
         "create_chat_model",
         lambda settings: model,
     )
+    monkeypatch.setattr(
+        composition,
+        "build_category_knowledge_base",
+        lambda settings: EmptyKnowledgeBase(),
+    )
     container = composition.build_container()
 
     product = await container.product_repository.find_by_id("P1001")
@@ -181,6 +186,7 @@ async def test_agent_places_queries_and_cancels_order_in_one_session(
         "place_order_tool",
         "query_order_tool",
         "cancel_order_tool",
+        "category_insight_tool",
         "task_dispatch",
     }
 
