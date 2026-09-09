@@ -11,6 +11,16 @@ from agentscope.model import ChatModelBase, ChatResponse
 from agentscope.tool import ToolChoice
 
 
+def build_composition_settings(
+    *,
+    reranker_base_url: str = "",
+) -> SimpleNamespace:
+    """Small settings double for fully monkeypatched composition tests."""
+    return SimpleNamespace(
+        reranker_base_url=reranker_base_url,
+    )
+
+
 class RecordingVectorStore:
     """Minimal async lifecycle double for a vector store."""
 
@@ -64,6 +74,66 @@ class EmptyKnowledgeBase:
         top_k: int = 5,
     ) -> list:
         return []
+
+
+class DeterministicEmbeddingClient:
+    """Offline embedding port double with observable calls."""
+
+    def __init__(self) -> None:
+        self.embed_calls: list[str] = []
+        self.batch_calls: list[list[str]] = []
+
+    async def embed(self, text: str) -> list[float]:
+        self.embed_calls.append(text)
+        return [1.0, 0.0]
+
+    async def embed_batch(
+        self,
+        texts: list[str],
+    ) -> list[list[float]]:
+        self.batch_calls.append(list(texts))
+        return [[1.0, 0.0] for _ in texts]
+
+
+class RecordingProductVectorIndex:
+    """Offline product-index double with lifecycle observations."""
+
+    def __init__(self) -> None:
+        self.ready_dimensions: list[int] = []
+        self.upsert_calls: list[dict] = []
+        self.search_calls: list[dict] = []
+        self.close_count = 0
+
+    async def ensure_ready(self, vector_dim: int) -> None:
+        self.ready_dimensions.append(vector_dim)
+
+    async def upsert_products(
+        self,
+        products,
+        embeddings: list[list[float]],
+    ) -> None:
+        self.upsert_calls.append(
+            {
+                "products": list(products),
+                "embeddings": list(embeddings),
+            }
+        )
+
+    async def search(
+        self,
+        embedding: list[float],
+        top_n: int,
+    ) -> list:
+        self.search_calls.append(
+            {
+                "embedding": embedding,
+                "top_n": top_n,
+            }
+        )
+        return []
+
+    async def close(self) -> None:
+        self.close_count += 1
 
 
 class ScriptedChatModel(ChatModelBase):

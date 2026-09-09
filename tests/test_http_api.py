@@ -24,7 +24,12 @@ from app.infrastructure.persistence.in_memory_product_repository import (
 )
 from app.infrastructure.persistence.seed_products import build_seed_products
 from app.presentation.server import build_app
-from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
+from tests.fakes import (
+    DeterministicEmbeddingClient,
+    EmptyKnowledgeBase,
+    RecordingProductVectorIndex,
+    ScriptedChatModel,
+)
 
 
 def build_test_container(
@@ -47,7 +52,13 @@ def build_test_container(
     repository = InMemoryProductRepository(
         build_seed_products(),
     )
-    catalog_search = CatalogSearchUseCase(repository)
+    embedder = DeterministicEmbeddingClient()
+    vector_index = RecordingProductVectorIndex()
+    catalog_search = CatalogSearchUseCase(
+        repository,
+        embedder=embedder,  # type: ignore[arg-type]
+        vector_index=vector_index,  # type: ignore[arg-type]
+    )
     order_repository = InMemoryOrderRepository()
     place_order = PlaceOrderUseCase(repository, order_repository)
     query_order = QueryOrderUseCase(order_repository)
@@ -87,6 +98,8 @@ def build_test_container(
             place_order=place_order,
             query_order=query_order,
             cancel_order=cancel_order,
+            embedder=embedder,  # type: ignore[arg-type]
+            vector_index=vector_index,  # type: ignore[arg-type]
         ),
         model,
     )
@@ -102,10 +115,12 @@ def test_health_endpoint() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_app_lifespan_starts_and_stops_knowledge_store() -> None:
+def test_app_lifespan_initializes_and_closes_vector_resources() -> None:
     container, _ = build_test_container()
     knowledge_base = container.knowledge_base
     vector_store = knowledge_base.vector_store
+    embedder = container.embedder
+    product_index = container.vector_index
 
     assert vector_store.enter_count == 0
     assert vector_store.exit_count == 0
@@ -116,8 +131,14 @@ def test_app_lifespan_starts_and_stops_knowledge_store() -> None:
         assert vector_store.exit_count == 0
         assert knowledge_base.ensure_collection_count == 1
         assert knowledge_base.document_ids == ["travel-gear"]
+        assert len(embedder.batch_calls) == 1
+        assert len(embedder.batch_calls[0]) == 3
+        assert product_index.ready_dimensions == [2]
+        assert len(product_index.upsert_calls) == 1
+        assert product_index.close_count == 0
 
     assert vector_store.exit_count == 1
+    assert product_index.close_count == 1
 
 
 def test_submit_intent_generates_session_and_uses_defaults() -> None:

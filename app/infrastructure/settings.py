@@ -19,8 +19,12 @@ class Settings:
     embedding_model: str
     embedding_dim: int
 
+    reranker_base_url: str
+    reranker_model: str
+
     qdrant_url: str
     category_kb_collection: str
+    product_vector_collection: str
     data_dir: Path
 
 
@@ -103,6 +107,18 @@ def load_settings() -> Settings:
         category_kb_collection=os.getenv(
             "CATEGORY_KB_COLLECTION",
             "globex_category_kb",
+        ).strip(),
+        product_vector_collection=os.getenv(
+            "PRODUCT_VECTOR_COLLECTION",
+            "globex_product_vectors",
+        ).strip(),
+        reranker_base_url=os.getenv(
+            "RERANKER_BASE_URL",
+            "",
+        ).strip(),
+        reranker_model=os.getenv(
+            "RERANKER_MODEL",
+            "",
         ).strip(),
         data_dir=data_dir,
     )

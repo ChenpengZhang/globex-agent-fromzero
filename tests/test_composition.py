@@ -8,7 +8,13 @@ from app.application.dto.order import (
     QueryOrderInput,
 )
 from app.domain.order.address import Address
-from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
+from tests.fakes import (
+    DeterministicEmbeddingClient,
+    EmptyKnowledgeBase,
+    RecordingProductVectorIndex,
+    ScriptedChatModel,
+    build_composition_settings,
+)
 
 
 @pytest.mark.asyncio
@@ -19,7 +25,7 @@ async def test_container_shares_repositories_across_order_use_cases(
     monkeypatch.setattr(
         composition,
         "load_settings",
-        lambda: object(),
+        build_composition_settings,
     )
     monkeypatch.setattr(
         composition,
@@ -31,7 +37,19 @@ async def test_container_shares_repositories_across_order_use_cases(
         "build_category_knowledge_base",
         lambda settings: EmptyKnowledgeBase(),
     )
+    monkeypatch.setattr(
+        composition,
+        "OpenAIEmbeddingClient",
+        lambda settings: DeterministicEmbeddingClient(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "QdrantProductIndex",
+        lambda settings: RecordingProductVectorIndex(),
+    )
     container = composition.build_container()
+
+    assert container.catalog_search._reranker is None
 
     product = await container.product_repository.find_by_id("P1001")
     assert product is not None
@@ -81,3 +99,49 @@ async def test_container_shares_repositories_across_order_use_cases(
 
     assert cancelled.status == "CANCELLED"
     assert sku.stock == initial_stock
+
+
+def test_container_injects_configured_reranker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = ScriptedChatModel(responses=[])
+    configured_reranker = object()
+    monkeypatch.setattr(
+        composition,
+        "load_settings",
+        lambda: build_composition_settings(
+            reranker_base_url="https://reranker.example/v1",
+        ),
+    )
+    monkeypatch.setattr(
+        composition,
+        "create_chat_model",
+        lambda settings: model,
+    )
+    monkeypatch.setattr(
+        composition,
+        "build_category_knowledge_base",
+        lambda settings: EmptyKnowledgeBase(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "OpenAIEmbeddingClient",
+        lambda settings: DeterministicEmbeddingClient(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "QdrantProductIndex",
+        lambda settings: RecordingProductVectorIndex(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "HttpReranker",
+        lambda settings: configured_reranker,
+    )
+
+    container = composition.build_container()
+
+    assert (
+        container.catalog_search._reranker
+        is configured_reranker
+    )

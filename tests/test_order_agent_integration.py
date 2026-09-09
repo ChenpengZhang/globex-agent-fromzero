@@ -13,7 +13,13 @@ import app.composition as composition
 from app.application.agents.orchestrator import SubmitIntentInput
 from app.domain.order.order import OrderStatus
 from app.infrastructure.context import ShoppingContext
-from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
+from tests.fakes import (
+    DeterministicEmbeddingClient,
+    EmptyKnowledgeBase,
+    RecordingProductVectorIndex,
+    ScriptedChatModel,
+    build_composition_settings,
+)
 
 
 def tool_call_response(
@@ -118,7 +124,7 @@ async def test_agent_places_queries_and_cancels_order_in_one_session(
     monkeypatch.setattr(
         composition,
         "load_settings",
-        lambda: object(),
+        build_composition_settings,
     )
     monkeypatch.setattr(
         composition,
@@ -129,6 +135,16 @@ async def test_agent_places_queries_and_cancels_order_in_one_session(
         composition,
         "build_category_knowledge_base",
         lambda settings: EmptyKnowledgeBase(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "OpenAIEmbeddingClient",
+        lambda settings: DeterministicEmbeddingClient(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "QdrantProductIndex",
+        lambda settings: RecordingProductVectorIndex(),
     )
     container = composition.build_container()
 

@@ -15,7 +15,13 @@ from app.application.agents.orchestrator import (
 )
 from app.domain.order.order import OrderStatus
 from app.infrastructure.context import ShoppingContext
-from tests.fakes import EmptyKnowledgeBase, ScriptedChatModel
+from tests.fakes import (
+    DeterministicEmbeddingClient,
+    EmptyKnowledgeBase,
+    RecordingProductVectorIndex,
+    ScriptedChatModel,
+    build_composition_settings,
+)
 
 
 def tool_call_response(
@@ -113,7 +119,7 @@ async def test_main_agent_dispatches_isolated_search_agent(
     monkeypatch.setattr(
         composition,
         "load_settings",
-        lambda: object(),
+        build_composition_settings,
     )
     monkeypatch.setattr(
         composition,
@@ -124,6 +130,16 @@ async def test_main_agent_dispatches_isolated_search_agent(
         composition,
         "build_category_knowledge_base",
         lambda settings: EmptyKnowledgeBase(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "OpenAIEmbeddingClient",
+        lambda settings: DeterministicEmbeddingClient(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "QdrantProductIndex",
+        lambda settings: RecordingProductVectorIndex(),
     )
     container = composition.build_container()
 
@@ -241,7 +257,7 @@ async def test_trade_agent_dispatch_preserves_buyer_context(
     monkeypatch.setattr(
         composition,
         "load_settings",
-        lambda: object(),
+        build_composition_settings,
     )
     monkeypatch.setattr(
         composition,
@@ -252,6 +268,16 @@ async def test_trade_agent_dispatch_preserves_buyer_context(
         composition,
         "build_category_knowledge_base",
         lambda settings: EmptyKnowledgeBase(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "OpenAIEmbeddingClient",
+        lambda settings: DeterministicEmbeddingClient(),
+    )
+    monkeypatch.setattr(
+        composition,
+        "QdrantProductIndex",
+        lambda settings: RecordingProductVectorIndex(),
     )
     container = composition.build_container()
 

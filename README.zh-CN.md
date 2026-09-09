@@ -74,6 +74,14 @@ Markdown 知识 → 切分 → embedding → Qdrant
                          content + source + score
 ```
 
+具体商品检索现在使用显式分级管线：
+
+```text
+Embedding + Qdrant → 可选 Reranker → 确定性硬过滤
+        ↓ 失败              ↓ 失败
+   中文二元切分        保留向量顺序
+```
+
 当前订单侧：
 
 ```text
@@ -105,9 +113,10 @@ InMemoryOrderRepository + Application DTO
 - SearchAgent、TradeAgent 和上下文隔离的任务派发。
 - 基于 Markdown 切分和 Qdrant 的品类知识 RAG。
 - 选购知识与具体商品事实的显式边界。
+- 商品向量索引、可选 Rerank 和显式降级链。
 - Domain、UseCase、Tool、RAG、HTTP 和会话的离线测试。
 
-当前共有 172 项测试通过。
+当前共有 206 项测试通过。
 
 ## 启动方式
 
@@ -127,6 +136,13 @@ export LLM_MODEL=<model name>
 ```bash
 export EMBEDDING_MODEL=<embedding model name>
 export EMBEDDING_DIM=<vector dimensions>
+```
+
+Reranker 是可选能力；URL 留空时按向量分数排序：
+
+```bash
+export RERANKER_BASE_URL=<rerank endpoint root>
+export RERANKER_MODEL=<reranker model name>
 ```
 
 启动 CLI：
@@ -165,8 +181,8 @@ uv run pytest
 | 10. 订单 Agent Tools | 已完成 | 交易工具和 Agent 端到端集成 |
 | 11. 子 Agent | 已完成 | SearchAgent、TradeAgent、任务派发和隔离 |
 | 12. 品类知识 RAG | 已完成 | Markdown 导入、Embedding、Qdrant 和知识工具 |
-| 13. 商品分级检索 | 当前章节 | 商品 Embedding、Rerank 和显式降级链 |
-| 14. 实时事件 | 计划中 | 类型化事件、流式回复和 WebSocket 推送 |
+| 13. 商品分级检索 | 已完成 | 商品 Embedding、Rerank 和显式降级链 |
+| 14. 实时事件 | 当前章节 | 类型化事件、流式回复和 WebSocket 推送 |
 | 15. 前端 | 计划中 | React 对话、商品/订单卡和事件时间线 |
 | 16. 持久化与记忆 | 计划中 | SQLite、会话恢复、对话和偏好 |
 | 17. Redis 与异步化 | 计划中 | 缓存、幂等、队列和跨进程事件 |

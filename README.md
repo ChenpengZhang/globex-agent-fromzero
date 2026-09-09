@@ -74,6 +74,14 @@ User → Agent → category_insight_tool → query embedding
                          content + source + score
 ```
 
+Concrete product retrieval now uses an explicit tiered pipeline:
+
+```text
+embedding + Qdrant → optional reranker → deterministic hard filters
+        ↓ failure          ↓ failure
+   keyword 2-gram     vector order
+```
+
 The order side currently contains:
 
 ```text
@@ -105,9 +113,10 @@ Place / Query / Cancel Order UseCases
 - SearchAgent, TradeAgent, and context-isolated task dispatch.
 - Category-knowledge RAG with Markdown chunking and Qdrant.
 - Explicit separation between selection knowledge and product facts.
+- Product-vector indexing, optional reranking, and explicit fallbacks.
 - Offline tests for Domain, UseCases, Tools, RAG, HTTP, and sessions.
 
-The current suite contains 172 passing tests.
+The current suite contains 206 passing tests.
 
 ## Setup
 
@@ -127,6 +136,13 @@ endpoint and key unless separate embedding credentials are provided:
 ```bash
 export EMBEDDING_MODEL=<embedding model name>
 export EMBEDDING_DIM=<vector dimensions>
+```
+
+Reranking is optional. Leave its URL empty to use vector order:
+
+```bash
+export RERANKER_BASE_URL=<rerank endpoint root>
+export RERANKER_MODEL=<reranker model name>
 ```
 
 Run the CLI:
@@ -165,8 +181,8 @@ Do not commit real API keys or other secrets.
 | 10. Order Agent Tools | Complete | Transaction tools and end-to-end Agent integration |
 | 11. Sub-Agents | Complete | SearchAgent, TradeAgent, task dispatch and isolation |
 | 12. Category-Knowledge RAG | Complete | Markdown ingestion, embeddings, Qdrant, knowledge tool |
-| 13. Tiered Product Retrieval | Current | Product embeddings, reranking, explicit fallbacks |
-| 14. Realtime Events | Planned | Typed events, streaming, WebSocket delivery |
+| 13. Tiered Product Retrieval | Complete | Product embeddings, reranking, explicit fallbacks |
+| 14. Realtime Events | Current | Typed events, streaming, WebSocket delivery |
 | 15. Frontend | Planned | React chat, product/order cards, event timeline |
 | 16. Persistence and Memory | Planned | SQLite, session recovery, conversations, preferences |
 | 17. Redis and Async Work | Planned | Caches, idempotency, queue, cross-process events |

@@ -3,9 +3,24 @@ from dataclasses import dataclass
 from agentscope.tool import FunctionTool
 from agentscope.rag import KnowledgeBase
 
+from app.domain.catalog.ports.retrieval_ports import (
+    EmbeddingClient,
+)
+from app.infrastructure.embedding.openai_embedding_client import (
+    OpenAIEmbeddingClient,
+)
+from app.infrastructure.vector.index_bootstrap import (
+    bootstrap_product_index,
+)
+from app.infrastructure.vector.qdrant_product_index import (
+    QdrantProductIndex,
+)
 from app.infrastructure.rag.category_knowledge import (
     bootstrap_category_knowledge,
     build_category_knowledge_base,
+)
+from app.infrastructure.rerank.http_reranker import (
+    HttpReranker,
 )
 from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import (
@@ -70,11 +85,20 @@ class Container:
     place_order: PlaceOrderUseCase
     query_order: QueryOrderUseCase
     cancel_order: CancelOrderUseCase
+
+    embedder: EmbeddingClient
+    vector_index: QdrantProductIndex
     # The container is the only place where it knows every module
 
     async def startup(self) -> None:
         """Initialize external resources and searchable data."""
         await self.knowledge_base.vector_store.__aenter__()
+
+        await bootstrap_product_index(
+            product_repository=self.product_repository,
+            embedder=self.embedder,
+            vector_index=self.vector_index,
+        )
 
         await bootstrap_category_knowledge(
             self.knowledge_base,
@@ -82,11 +106,27 @@ class Container:
 
     async def shutdown(self) -> None:
         """Release external resources."""
-        await self.knowledge_base.vector_store.__aexit__(None, None, None)
-
+        try:
+            await self.vector_index.close()
+        finally:
+            await self.knowledge_base.vector_store.__aexit__(
+                None,
+                None,
+                None,
+            )
 
 def build_container() -> Container:
     settings = load_settings()
+
+    embedder = OpenAIEmbeddingClient(settings)
+
+    vector_index = QdrantProductIndex(settings)
+
+    reranker = (
+        HttpReranker(settings)
+        if settings.reranker_base_url
+        else None
+    )
 
     knowledge_base = build_category_knowledge_base(
         settings,
@@ -98,6 +138,9 @@ def build_container() -> Container:
 
     catalog_search = CatalogSearchUseCase(
         product_repository,
+        embedder=embedder,
+        vector_index=vector_index,
+        reranker=reranker,
     )
 
     order_repository = InMemoryOrderRepository()
@@ -162,6 +205,8 @@ def build_container() -> Container:
         main_agent_factory=main_agent_factory,
         search_agent_factory=search_agent_factory,
         trade_agent_factory=trade_agent_factory,
+        embedder=embedder,
+        vector_index=vector_index,
         knowledge_base=knowledge_base,
         sessions=sessions,
         orchestrator=orchestrator,
