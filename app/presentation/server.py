@@ -1,8 +1,11 @@
 import uuid
 
+from typing import Annotated
+
 from fastapi import (
     FastAPI,
     HTTPException,
+    Query,
     WebSocket,
 )
 from contextlib import asynccontextmanager
@@ -13,8 +16,15 @@ from app.application.agents.orchestrator import (
 from app.application.agents.session_registry import (
     SessionOwnershipError,
 )
+from app.application.usecases.get_conversation_history import (
+    ConversationNotFoundError,
+    ConversationOwnershipError,
+    GetConversationHistoryInput,
+)
 from app.composition import Container, build_container
 from app.presentation.dto import (
+    ConversationHistoryResponse,
+    ConversationTurnResponse,
     SubmitIntentRequest,
     SubmitIntentResponse,
 )
@@ -91,6 +101,60 @@ def build_app(
                 result.shopping_session_id
             ),
             final_text=result.final_text,
+        )
+
+    @api.get(
+    "/commerce/sessions/{session_id}/history",
+    response_model=ConversationHistoryResponse,
+    )
+    async def get_conversation_history(
+        session_id: str,
+        buyer_id: Annotated[
+            str,
+            Query(min_length=1),
+        ],
+        limit: Annotated[
+            int,
+            Query(ge=1, le=100),
+        ] = 50,
+    ) -> ConversationHistoryResponse:
+        try:
+            result = (
+                await runtime_container
+                .get_conversation_history
+                .execute(
+                    GetConversationHistoryInput(
+                        session_id=session_id,
+                        buyer_id=buyer_id,
+                        limit=limit,
+                    )
+                )
+            )
+
+        except ConversationNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail=str(error),
+            ) from error
+
+        except ConversationOwnershipError as error:
+            raise HTTPException(
+                status_code=403,
+                detail=str(error),
+            ) from error
+
+        return ConversationHistoryResponse(
+            session_id=result.session_id,
+            turns=[
+                ConversationTurnResponse(
+                    role=turn.role,
+                    content=turn.content,
+                    model=turn.model,
+                    latency_ms=turn.latency_ms,
+                    created_at=turn.created_at,
+                )
+                for turn in result.turns
+            ],
         )
 
     @api.websocket("/commerce/events")

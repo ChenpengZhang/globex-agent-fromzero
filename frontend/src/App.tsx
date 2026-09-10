@@ -6,7 +6,10 @@ import {
   useState,
 } from "react";
 
-import { submitIntent } from "./api";
+import {
+  loadConversationHistory,
+  submitIntent,
+} from "./api";
 import EventTimeline from "./components/EventTimeline";
 import OrderCard from "./components/OrderCard";
 import ProductCards from "./components/ProductCards";
@@ -56,6 +59,7 @@ export default function App() {
   const [streamingText, setStreamingText] = useState("");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -95,6 +99,45 @@ export default function App() {
   }, [sessionId]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    setHistoryLoading(true);
+    setTurns([]);
+
+    void loadConversationHistory(sessionId, buyerId)
+      .then((history) => {
+        if (cancelled) {
+          return;
+        }
+
+        setTurns(
+          (history?.turns ?? []).map((turn) => ({
+            id: createTurnId(),
+            role: turn.role,
+            text: turn.content,
+          })),
+        );
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+        setNotice(message);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buyerId, sessionId]);
+
+  useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "end",
@@ -104,7 +147,7 @@ export default function App() {
   async function send(queryOverride?: string) {
     const query = (queryOverride ?? input).trim();
 
-    if (!query || busy) {
+    if (!query || busy || historyLoading) {
       return;
     }
 
@@ -197,7 +240,7 @@ export default function App() {
           </span>
           <button
             className="secondary-button"
-            disabled={busy}
+            disabled={busy || historyLoading}
             onClick={startNewConversation}
             type="button"
           >
@@ -220,7 +263,12 @@ export default function App() {
           </div>
 
           <div className="transcript" aria-live="polite">
-            {turns.length === 0 && !streamingText ? (
+            {historyLoading ? (
+              <div className="thinking history-loading" role="status">
+                <span /><span /><span />
+                正在恢复这段对话
+              </div>
+            ) : turns.length === 0 && !streamingText ? (
               <div className="welcome">
                 <span className="welcome-icon" aria-hidden="true">✦</span>
                 <h2>你好，我是 Globex</h2>
@@ -230,7 +278,7 @@ export default function App() {
                 <div className="starter-list">
                   {STARTERS.map((starter) => (
                     <button
-                      disabled={busy}
+                      disabled={busy || historyLoading}
                       key={starter}
                       onClick={() => void send(starter)}
                       type="button"
@@ -294,6 +342,7 @@ export default function App() {
               输入购物需求
             </label>
             <textarea
+              disabled={historyLoading}
               id="shopping-query"
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
@@ -303,7 +352,10 @@ export default function App() {
             />
             <div className="composer-footer">
               <span>Enter 发送 · Shift + Enter 换行</span>
-              <button disabled={busy || !input.trim()} type="submit">
+              <button
+                disabled={busy || historyLoading || !input.trim()}
+                type="submit"
+              >
                 {busy ? "处理中" : "发送需求"}
                 <span aria-hidden="true">↑</span>
               </button>

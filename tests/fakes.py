@@ -1,4 +1,5 @@
 from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,6 +11,11 @@ from agentscope.message import Msg
 from agentscope.model import ChatModelBase, ChatResponse
 from agentscope.tool import ToolChoice
 
+from app.domain.session.ports.conversation_store import (
+    ConversationEventRecord,
+    ConversationTurn,
+)
+
 
 def build_composition_settings(
     *,
@@ -18,7 +24,83 @@ def build_composition_settings(
     """Small settings double for fully monkeypatched composition tests."""
     return SimpleNamespace(
         reranker_base_url=reranker_base_url,
+        data_dir=Path(
+            "/private/tmp/globex-agent-fromzero-tests",
+        ),
     )
+
+
+class InMemorySessionStore:
+    """SessionStore test double that survives registry replacement."""
+
+    def __init__(self) -> None:
+        self.snapshots: dict[str, str] = {}
+
+    async def save(
+        self,
+        session_id: str,
+        state_json: str,
+    ) -> None:
+        self.snapshots[session_id] = state_json
+
+    async def load(
+        self,
+        session_id: str,
+    ) -> str | None:
+        return self.snapshots.get(session_id)
+
+
+class InMemoryConversationStore:
+    """ConversationStore test double with observable records."""
+
+    def __init__(self) -> None:
+        self.sessions: dict[str, dict[str, str]] = {}
+        self.turns: list[ConversationTurn] = []
+        self.events: list[ConversationEventRecord] = []
+
+    async def touch_session(
+        self,
+        session_id: str,
+        buyer_id: str,
+        locale: str,
+        currency: str,
+    ) -> None:
+        self.sessions[session_id] = {
+            "session_id": session_id,
+            "buyer_id": buyer_id,
+            "locale": locale,
+            "currency": currency,
+        }
+
+    async def append_turn(
+        self,
+        turn: ConversationTurn,
+    ) -> None:
+        self.turns.append(turn)
+
+    async def append_events(
+        self,
+        events: list[ConversationEventRecord],
+    ) -> None:
+        self.events.extend(events)
+
+    async def list_turns(
+        self,
+        session_id: str,
+        limit: int = 50,
+    ) -> list[ConversationTurn]:
+        matching = [
+            turn
+            for turn in self.turns
+            if turn.session_id == session_id
+        ]
+        return matching[-limit:] if limit > 0 else []
+
+    async def find_session(
+        self,
+        session_id: str,
+    ) -> dict[str, str] | None:
+        return self.sessions.get(session_id)
 
 
 class RecordingVectorStore:

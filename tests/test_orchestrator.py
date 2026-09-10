@@ -13,7 +13,11 @@ from app.application.agents.orchestrator import (
 from app.application.agents.session_registry import SessionRegistry
 from app.application.events import TradeEventType
 from app.infrastructure.eventbus import InMemoryTradeEventBus
-from tests.fakes import ScriptedChatModel
+from tests.fakes import (
+    InMemoryConversationStore,
+    InMemorySessionStore,
+    ScriptedChatModel,
+)
 
 
 def test_submit_intent_input_normalizes_values() -> None:
@@ -92,12 +96,15 @@ async def test_orchestrator_builds_agent_message() -> None:
         model=model,
         tools=[],
     )
-    sessions = SessionRegistry(factory)
+    session_store = InMemorySessionStore()
+    sessions = SessionRegistry(factory, session_store)
     event_bus = InMemoryTradeEventBus()
     event_queue = event_bus.subscribe("session-001")
+    conversation_store = InMemoryConversationStore()
     orchestrator = MainAgentOrchestrator(
         sessions=sessions,
-        event_publisher=event_bus,
+        event_bus=event_bus,
+        conversation_store=conversation_store,
     )
 
     result = await orchestrator.handle_intent(
@@ -123,6 +130,18 @@ async def test_orchestrator_builds_agent_message() -> None:
     assert final_event.type is TradeEventType.FINAL_RESULT
     assert final_event.payload == {"text": "你好，我是 Globex。"}
     assert event_queue.empty()
+    assert "session-001" in session_store.snapshots
+    assert [turn.role for turn in conversation_store.turns] == [
+        "buyer",
+        "agent",
+    ]
+    assert [turn.content for turn in conversation_store.turns] == [
+        "你好",
+        "你好，我是 Globex。",
+    ]
+    assert [event.type for event in conversation_store.events] == [
+        "final.result",
+    ]
 
     assert len(model.calls) == 1
 
@@ -148,4 +167,45 @@ async def test_orchestrator_builds_agent_message() -> None:
     assert "locale: zh-CN" in content
     assert "currency: CNY" in content
     assert "你好" in content
-    
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_persists_state_when_agent_fails() -> None:
+    model = ScriptedChatModel(responses=[])
+    factory = MainAgentFactory(model=model, tools=[])
+    session_store = InMemorySessionStore()
+    sessions = SessionRegistry(factory, session_store)
+    event_bus = InMemoryTradeEventBus()
+    event_queue = event_bus.subscribe("session-error")
+    conversation_store = InMemoryConversationStore()
+    orchestrator = MainAgentOrchestrator(
+        sessions=sessions,
+        event_bus=event_bus,
+        conversation_store=conversation_store,
+    )
+
+    with pytest.raises(
+        AssertionError,
+        match="没有更多预设响应",
+    ):
+        await orchestrator.handle_intent(
+            SubmitIntentInput(
+                shopping_session_id="session-error",
+                buyer_id="buyer-001",
+                locale="zh-CN",
+                currency="CNY",
+                raw_query="触发模型错误",
+            ),
+        )
+
+    assert "session-error" in session_store.snapshots
+    events = []
+    while not event_queue.empty():
+        events.append(event_queue.get_nowait())
+    assert events[-1].type is TradeEventType.ERROR
+    assert [turn.role for turn in conversation_store.turns] == [
+        "buyer",
+    ]
+    assert [event.type for event in conversation_store.events] == [
+        "error",
+    ]

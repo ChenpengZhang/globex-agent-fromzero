@@ -11,6 +11,19 @@ export interface SubmitIntentResponse {
   final_text: string;
 }
 
+export interface ConversationTurnRecord {
+  role: "buyer" | "agent";
+  content: string;
+  model: string;
+  latency_ms: number;
+  created_at: string;
+}
+
+export interface ConversationHistoryResponse {
+  session_id: string;
+  turns: ConversationTurnRecord[];
+}
+
 export type ConnectionState =
   | "connecting"
   | "connected"

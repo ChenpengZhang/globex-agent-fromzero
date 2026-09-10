@@ -43,4 +43,16 @@ class SubmitIntentRequest(BaseModel):
 class SubmitIntentResponse(BaseModel):
     shopping_session_id: str
     final_text: str
-    
+
+
+class ConversationTurnResponse(BaseModel):
+    role: str
+    content: str
+    model: str
+    latency_ms: int
+    created_at: str
+
+
+class ConversationHistoryResponse(BaseModel):
+    session_id: str
+    turns: list[ConversationTurnResponse]

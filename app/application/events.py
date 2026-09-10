@@ -1,3 +1,5 @@
+import asyncio
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -39,4 +41,19 @@ class EventPublisher(Protocol):
         payload: dict[str, Any],
     ) -> TradeEvent:
         ...
-        
+
+class EventBus(EventPublisher, Protocol):
+    """Publish and subscribe to session-scoped trade events."""
+
+    def subscribe(
+        self,
+        shopping_session_id: str,
+    ) -> asyncio.Queue[TradeEvent]:
+        ...
+
+    def unsubscribe(
+        self,
+        shopping_session_id: str,
+        queue: asyncio.Queue[TradeEvent],
+    ) -> None:
+        ...

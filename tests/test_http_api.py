@@ -15,6 +15,9 @@ from app.application.usecases.cancel_order import CancelOrderUseCase
 from app.application.usecases.catalog_search import CatalogSearchUseCase
 from app.application.usecases.place_order import PlaceOrderUseCase
 from app.application.usecases.query_order import QueryOrderUseCase
+from app.application.usecases.get_conversation_history import (
+    GetConversationHistoryUseCase,
+)
 from app.composition import Container
 from app.infrastructure.persistence.in_memory_order_repository import (
     InMemoryOrderRepository,
@@ -28,6 +31,8 @@ from app.presentation.server import build_app
 from tests.fakes import (
     DeterministicEmbeddingClient,
     EmptyKnowledgeBase,
+    InMemoryConversationStore,
+    InMemorySessionStore,
     RecordingProductVectorIndex,
     ScriptedChatModel,
 )
@@ -80,11 +85,19 @@ def build_test_container(
         query_order=query_order,
         cancel_order=cancel_order,
     )
-    sessions = SessionRegistry(main_agent_factory)
+    sessions = SessionRegistry(
+        main_agent_factory,
+        InMemorySessionStore(),
+    )
     event_bus = InMemoryTradeEventBus()
+    conversation_store = InMemoryConversationStore()
+    get_conversation_history = GetConversationHistoryUseCase(
+        conversation_store,
+    )
     orchestrator = MainAgentOrchestrator(
         sessions=sessions,
-        event_publisher=event_bus,
+        event_bus=event_bus,
+        conversation_store=conversation_store,
     )
 
     return (
@@ -94,6 +107,8 @@ def build_test_container(
             trade_agent_factory=trade_agent_factory,
             knowledge_base=knowledge_base,  # type: ignore[arg-type]
             event_bus=event_bus,
+            conversation_store=conversation_store,
+            get_conversation_history=get_conversation_history,
             sessions=sessions,
             orchestrator=orchestrator,
             product_repository=repository,
@@ -246,6 +261,91 @@ def test_submit_intent_rejects_session_reuse_by_other_buyer() -> None:
     assert "已绑定到其他 buyer" in second_response.json()["detail"]
 
 
+def test_history_endpoint_returns_persisted_turns() -> None:
+    container, _ = build_test_container(
+        final_text="历史中的 Agent 回复",
+    )
+
+    with TestClient(build_app(container)) as client:
+        submitted = client.post(
+            "/commerce/intents",
+            json={
+                "shopping_session_id": "session-history",
+                "buyer_id": "buyer-001",
+                "raw_query": "历史中的买家问题",
+            },
+        )
+        response = client.get(
+            "/commerce/sessions/session-history/history",
+            params={"buyer_id": "buyer-001", "limit": 10},
+        )
+
+    assert submitted.status_code == 200
+    assert response.status_code == 200
+    assert response.json()["session_id"] == "session-history"
+    assert [
+        turn["content"]
+        for turn in response.json()["turns"]
+    ] == [
+        "历史中的买家问题",
+        "历史中的 Agent 回复",
+    ]
+
+
+def test_history_endpoint_returns_404_for_missing_session() -> None:
+    container, _ = build_test_container()
+
+    with TestClient(build_app(container)) as client:
+        response = client.get(
+            "/commerce/sessions/missing/history",
+            params={"buyer_id": "buyer-001"},
+        )
+
+    assert response.status_code == 404
+
+
+def test_history_endpoint_rejects_another_buyer() -> None:
+    container, _ = build_test_container()
+
+    with TestClient(build_app(container)) as client:
+        client.post(
+            "/commerce/intents",
+            json={
+                "shopping_session_id": "session-private-history",
+                "buyer_id": "buyer-owner",
+                "raw_query": "private question",
+            },
+        )
+        response = client.get(
+            "/commerce/sessions/session-private-history/history",
+            params={"buyer_id": "buyer-intruder"},
+        )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {},
+        {"buyer_id": "buyer-001", "limit": 0},
+        {"buyer_id": "buyer-001", "limit": 101},
+    ],
+)
+def test_history_endpoint_validates_query_parameters(
+    params: dict,
+) -> None:
+    container, _ = build_test_container()
+
+    with TestClient(build_app(container)) as client:
+        response = client.get(
+            "/commerce/sessions/session-001/history",
+            params=params,
+        )
+
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -320,3 +420,4 @@ def test_websocket_streams_session_events_and_unsubscribes() -> None:
     assert final_event["payload"] == {
         "text": "实时测试回复",
     }
+    InMemorySessionStore,

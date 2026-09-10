@@ -1,10 +1,21 @@
+import asyncio
+import logging
+import time
+
 from dataclasses import dataclass
 from agentscope.agent import Agent
 from agentscope.event import TextBlockDeltaEvent
 from agentscope.message import Msg, UserMsg
 
+from app.domain.session.ports.conversation_store import (
+    ConversationEventRecord,
+    ConversationStore,
+    ConversationTurn,
+)
+
 from app.application.events import (
-    EventPublisher,
+    EventBus,
+    TradeEvent,
     TradeEventType,
 )
 from app.application.agents.session_registry import (
@@ -15,6 +26,9 @@ from app.infrastructure.context import (
     ShoppingContext,
     ShoppingContextSnapshot,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -80,10 +94,12 @@ class MainAgentOrchestrator:
     def __init__(
         self,
         sessions: SessionRegistry,
-        event_publisher: EventPublisher,
+        event_bus: EventBus,
+        conversation_store: ConversationStore | None = None,
     ) -> None:
         self._sessions = sessions
-        self._event_publisher = event_publisher
+        self._event_bus = event_bus
+        self._conversation_store = conversation_store
 
     async def handle_intent(
         self,
@@ -124,6 +140,19 @@ class MainAgentOrchestrator:
             # This token is used to recover ContextVar
             # incase of recursive calls clears out all contexts
             # make sure use the token to clear the ShoppingContext
+            started_at = time.monotonic()
+            final_text: str | None = None
+
+            trace = (
+                self._event_bus.subscribe(
+                    intent.shopping_session_id,
+                )
+                if self._conversation_store is not None
+                else None
+            )
+            # Subscribe to record trace info (for logging and analizing).
+            # Note that subcription occurs after the session lock
+            # in order to avoid B to collect A's trace.
 
             try:
                 final_text = await self._consume_reply(
@@ -134,7 +163,7 @@ class MainAgentOrchestrator:
                     ),
                 )
 
-                self._event_publisher.publish(
+                self._event_bus.publish(
                     intent.shopping_session_id,
                     TradeEventType.FINAL_RESULT,
                     {
@@ -143,7 +172,7 @@ class MainAgentOrchestrator:
                 )
 
             except Exception as error:
-                self._event_publisher.publish(
+                self._event_bus.publish(
                     intent.shopping_session_id,
                     TradeEventType.ERROR,
                     {
@@ -153,6 +182,21 @@ class MainAgentOrchestrator:
                 raise
 
             finally:
+                await self._sessions.persist(
+                    intent.shopping_session_id,
+                )
+                # Persist AgentState on both success and failure
+
+                await self._record_conversation(
+                    intent=intent,
+                    final_text=final_text,
+                    latency_ms=int(
+                        (time.monotonic() - started_at) * 1000
+                    ),
+                    trace=trace,
+                )
+                # save conversation and trace
+
                 ShoppingContext.reset(reset_token)
 
 
@@ -160,8 +204,89 @@ class MainAgentOrchestrator:
             shopping_session_id=(
                 intent.shopping_session_id
             ),
-            final_text=final_text,
+            final_text=final_text or "",
         )
+
+    async def _record_conversation(
+        self,
+        intent: SubmitIntentInput,
+        final_text: str | None,
+        latency_ms: int,
+        trace: asyncio.Queue[TradeEvent] | None,
+    ) -> None:
+        """Persist readable turns and non-token execution events."""
+
+        if self._conversation_store is None:
+            return
+
+        events: list[ConversationEventRecord] = []
+
+        if trace is not None:
+            self._event_bus.unsubscribe(
+                intent.shopping_session_id,
+                trace,
+            )
+            # trace is temporary
+
+            while not trace.empty():
+                event = trace.get_nowait()
+
+                if event.type is TradeEventType.TOKEN_DELTA:
+                    continue
+
+                events.append(
+                    ConversationEventRecord(
+                        session_id=(
+                            intent.shopping_session_id
+                        ),
+                        type=event.type.value,
+                        payload=event.payload,
+                        occurred_at=(
+                            event.occurred_at.isoformat()
+                        ),
+                    )
+                )
+
+        try:
+            await self._conversation_store.touch_session(
+                session_id=intent.shopping_session_id,
+                buyer_id=intent.buyer_id,
+                locale=intent.locale,
+                currency=intent.currency,
+            )
+
+            await self._conversation_store.append_turn(
+                ConversationTurn(
+                    session_id=intent.shopping_session_id,
+                    buyer_id=intent.buyer_id,
+                    role="buyer",
+                    content=intent.raw_query,
+                )
+            )
+
+            if final_text is not None:
+                await self._conversation_store.append_turn(
+                    ConversationTurn(
+                        session_id=(
+                            intent.shopping_session_id
+                        ),
+                        buyer_id=intent.buyer_id,
+                        role="agent",
+                        content=final_text,
+                        latency_ms=latency_ms,
+                    )
+                )
+
+            await self._conversation_store.append_events(
+                events,
+            )
+
+        except Exception as error:
+            logger.warning(
+                "Failed to persist conversation %s: %s",
+                intent.shopping_session_id,
+                error,
+            )
 
     async def _consume_reply(
         self,
@@ -177,7 +302,7 @@ class MainAgentOrchestrator:
         ):
             if isinstance(event, TextBlockDeltaEvent):
                 if event.delta:
-                    self._event_publisher.publish(
+                    self._event_bus.publish(
                         shopping_session_id,
                         TradeEventType.TOKEN_DELTA,
                         {

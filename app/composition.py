@@ -6,6 +6,12 @@ from agentscope.rag import KnowledgeBase
 from app.domain.catalog.ports.retrieval_ports import (
     EmbeddingClient,
 )
+from app.domain.session.ports.conversation_store import (
+    ConversationStore,
+)
+from app.infrastructure.persistence.json_file_conversation_store import (
+    JsonFileConversationStore,
+)
 from app.infrastructure.embedding.openai_embedding_client import (
     OpenAIEmbeddingClient,
 )
@@ -24,6 +30,9 @@ from app.infrastructure.rerank.http_reranker import (
 )
 from app.infrastructure.eventbus import (
     InMemoryTradeEventBus,
+)
+from app.infrastructure.persistence.json_file_session_store import (
+    JsonFileSessionStore,
 )
 from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import (
@@ -52,6 +61,9 @@ from app.application.usecases.query_order import (
 )
 from app.application.agents.session_registry import (
     SessionRegistry,
+)
+from app.application.usecases.get_conversation_history import (
+    GetConversationHistoryUseCase,
 )
 from app.domain.catalog.ports.product_repository import (
     ProductRepository,
@@ -85,6 +97,8 @@ class Container:
     knowledge_base: KnowledgeBase
 
     event_bus: InMemoryTradeEventBus
+    conversation_store: ConversationStore
+    get_conversation_history: GetConversationHistoryUseCase
 
     catalog_search: CatalogSearchUseCase
     place_order: PlaceOrderUseCase
@@ -198,15 +212,29 @@ def build_container() -> Container:
         ],
     )
 
+    session_store = JsonFileSessionStore(
+        settings.data_dir,
+    )
+
     sessions = SessionRegistry(
         main_agent_factory=main_agent_factory,
+        session_store=session_store,
     )
 
     event_bus = InMemoryTradeEventBus()
 
+    conversation_store = JsonFileConversationStore(
+        settings.data_dir,
+    )
+
+    get_conversation_history = GetConversationHistoryUseCase(
+        conversation_store=conversation_store,
+    )
+
     orchestrator = MainAgentOrchestrator(
         sessions=sessions,
-        event_publisher=event_bus,
+        event_bus=event_bus,
+        conversation_store=conversation_store,
     )
 
     return Container(
@@ -217,6 +245,8 @@ def build_container() -> Container:
         vector_index=vector_index,
         knowledge_base=knowledge_base,
         event_bus=event_bus,
+        conversation_store=conversation_store,
+        get_conversation_history=get_conversation_history,
         sessions=sessions,
         orchestrator=orchestrator,
         product_repository=product_repository,

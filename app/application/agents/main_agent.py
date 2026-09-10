@@ -1,6 +1,7 @@
 from agentscope.agent import Agent, ReActConfig
 from agentscope.model import ChatModelBase
 from agentscope.tool import FunctionTool, Toolkit
+from agentscope.state import AgentState
 
 from app.application.agents.permissions import (
     allow_business_tools,
@@ -10,6 +11,7 @@ from app.application.agents.permissions import (
 def create_main_agent(
     model: ChatModelBase,
     tools: list[FunctionTool],
+    state: AgentState | None = None,
 ) -> Agent:
     """Create the Globex main commerce agent."""
 
@@ -103,6 +105,7 @@ def create_main_agent(
         toolkit=Toolkit(
             tools=tools,
         ),
+        state=state,
         react_config=ReActConfig(
             max_iters=5,
         ),
@@ -119,9 +122,13 @@ class MainAgentFactory:
         self._model = model
         self._tools = list(tools)
 
-    def build(self) -> Agent:
+    def build(
+        self,
+        state: AgentState | None = None,
+    ) -> Agent:
         return create_main_agent(
             model=self._model,
             tools=list(self._tools),
+            state=state,
         )
     

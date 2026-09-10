@@ -8,7 +8,7 @@ fall back to the final HTTP response, preserve browser identity, start a new
 shopping session, and show an execution timeline.
 
 The chapter was implemented as one complete module so the learning path can
-continue with persistence and long-term memory. The frontend remains a client of
+continue with persistence and, later, long-term memory. The frontend remains a client of
 the existing backend contracts; it does not duplicate the Agent, retrieval, or
 order workflows.
 
@@ -72,7 +72,7 @@ shopping_session_id   one conversation and Agent-state boundary
 Reloading the page keeps both values. Choosing **New conversation** replaces
 only the shopping session ID, clears the visible conversation, and creates a
 fresh backend Agent session on the next request. The buyer ID remains stable so
-Chapter 16 can associate durable preferences and history with the same buyer.
+Chapter 18 can associate durable preferences with the same buyer across sessions.
 
 These random IDs are learning-stage identifiers, not authentication tokens.
 Production identity and authorization remain later concerns.
@@ -201,5 +201,6 @@ desktop and mobile browser rendering:      passed
 - There are no frontend component or end-to-end automated tests yet.
 - Agent text is rendered as plain text rather than Markdown.
 
-Chapter 16 can now add persistence, session recovery, conversation history, and
-long-term buyer preferences behind stable application boundaries.
+Chapter 16 can now add file persistence, session recovery, and conversation history
+behind stable application boundaries. Relational database persistence follows in
+Chapter 17, and long-term buyer preferences follow in Chapter 18.

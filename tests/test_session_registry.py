@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from agentscope.message import TextBlock
+from agentscope.message import TextBlock, UserMsg
 from agentscope.model import ChatResponse
 
 from app.application.agents.main_agent import MainAgentFactory
@@ -15,7 +15,10 @@ from app.application.agents.session_registry import (
     SessionRegistry,
 )
 from app.infrastructure.eventbus import InMemoryTradeEventBus
-from tests.fakes import ScriptedChatModel
+from tests.fakes import (
+    InMemorySessionStore,
+    ScriptedChatModel,
+)
 
 
 def build_registry(
@@ -28,7 +31,71 @@ def build_registry(
         model=model,
         tools=[],
     )
-    return SessionRegistry(factory), model
+    return SessionRegistry(
+        factory,
+        InMemorySessionStore(),
+    ), model
+
+
+@pytest.mark.asyncio
+async def test_persisted_agent_state_is_restored_by_new_registry() -> None:
+    store = InMemorySessionStore()
+    first_factory = MainAgentFactory(
+        model=ScriptedChatModel(responses=[]),
+        tools=[],
+    )
+    first_registry = SessionRegistry(first_factory, store)
+    first_entry = await first_registry.get_or_create(
+        "session-restored",
+        "buyer-001",
+    )
+    first_entry.agent.state.context.append(
+        UserMsg(
+            name="buyer-001",
+            content="需要在重启后保留的问题",
+        )
+    )
+
+    await first_registry.persist("session-restored")
+
+    second_factory = MainAgentFactory(
+        model=ScriptedChatModel(responses=[]),
+        tools=[],
+    )
+    second_registry = SessionRegistry(second_factory, store)
+    restored_entry = await second_registry.get_or_create(
+        "session-restored",
+        "buyer-001",
+    )
+
+    assert restored_entry is not first_entry
+    assert any(
+        message.get_text_content() == "需要在重启后保留的问题"
+        for message in restored_entry.agent.state.context
+    )
+
+
+@pytest.mark.asyncio
+async def test_restored_session_rejects_another_buyer() -> None:
+    store = InMemorySessionStore()
+    factory = MainAgentFactory(
+        model=ScriptedChatModel(responses=[]),
+        tools=[],
+    )
+    first_registry = SessionRegistry(factory, store)
+    await first_registry.get_or_create(
+        "session-private",
+        "buyer-owner",
+    )
+    await first_registry.persist("session-private")
+
+    restarted_registry = SessionRegistry(factory, store)
+
+    with pytest.raises(SessionOwnershipError):
+        await restarted_registry.get_or_create(
+            "session-private",
+            "buyer-intruder",
+        )
 
 
 @pytest.mark.asyncio
