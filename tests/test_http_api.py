@@ -23,6 +23,7 @@ from app.infrastructure.persistence.in_memory_product_repository import (
     InMemoryProductRepository,
 )
 from app.infrastructure.persistence.seed_products import build_seed_products
+from app.infrastructure.eventbus import InMemoryTradeEventBus
 from app.presentation.server import build_app
 from tests.fakes import (
     DeterministicEmbeddingClient,
@@ -80,8 +81,10 @@ def build_test_container(
         cancel_order=cancel_order,
     )
     sessions = SessionRegistry(main_agent_factory)
+    event_bus = InMemoryTradeEventBus()
     orchestrator = MainAgentOrchestrator(
         sessions=sessions,
+        event_publisher=event_bus,
     )
 
     return (
@@ -90,6 +93,7 @@ def build_test_container(
             search_agent_factory=search_agent_factory,
             trade_agent_factory=trade_agent_factory,
             knowledge_base=knowledge_base,  # type: ignore[arg-type]
+            event_bus=event_bus,
             sessions=sessions,
             orchestrator=orchestrator,
             product_repository=repository,
@@ -274,3 +278,45 @@ def test_submit_intent_rejects_invalid_http_payload(
         )
 
     assert response.status_code == 422
+
+
+def test_websocket_streams_session_events_and_unsubscribes() -> None:
+    container, _ = build_test_container(
+        final_text="实时测试回复",
+    )
+
+    with TestClient(build_app(container)) as client:
+        with client.websocket_connect(
+            "/commerce/events",
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "shopping_session_id": "session-stream",
+                }
+            )
+
+            response = client.post(
+                "/commerce/intents",
+                json={
+                    "shopping_session_id": "session-stream",
+                    "buyer_id": "buyer-001",
+                    "raw_query": "你好",
+                },
+            )
+
+            token_event = websocket.receive_json()
+            final_event = websocket.receive_json()
+
+        assert "session-stream" not in container.event_bus._subscribers
+
+    assert response.status_code == 200
+    assert token_event["shopping_session_id"] == "session-stream"
+    assert token_event["type"] == "token.delta"
+    assert token_event["payload"] == {
+        "agent_name": "commerce_concierge",
+        "token": "实时测试回复",
+    }
+    assert final_event["type"] == "final.result"
+    assert final_event["payload"] == {
+        "text": "实时测试回复",
+    }

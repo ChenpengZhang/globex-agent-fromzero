@@ -114,9 +114,10 @@ Place / Query / Cancel Order UseCases
 - Category-knowledge RAG with Markdown chunking and Qdrant.
 - Explicit separation between selection knowledge and product facts.
 - Product-vector indexing, optional reranking, and explicit fallbacks.
+- Typed realtime events, token streaming, and session-scoped WebSocket delivery.
 - Offline tests for Domain, UseCases, Tools, RAG, HTTP, and sessions.
 
-The current suite contains 206 passing tests.
+The current suite contains 211 passing tests.
 
 ## Setup
 
@@ -182,8 +183,8 @@ Do not commit real API keys or other secrets.
 | 11. Sub-Agents | Complete | SearchAgent, TradeAgent, task dispatch and isolation |
 | 12. Category-Knowledge RAG | Complete | Markdown ingestion, embeddings, Qdrant, knowledge tool |
 | 13. Tiered Product Retrieval | Complete | Product embeddings, reranking, explicit fallbacks |
-| 14. Realtime Events | Current | Typed events, streaming, WebSocket delivery |
-| 15. Frontend | Planned | React chat, product/order cards, event timeline |
+| 14. Realtime Events | Complete | Typed events, streaming, WebSocket delivery |
+| 15. Frontend | Current | React chat, product/order cards, event timeline |
 | 16. Persistence and Memory | Planned | SQLite, session recovery, conversations, preferences |
 | 17. Redis and Async Work | Planned | Caches, idempotency, queue, cross-process events |
 | 18. Production Hardening | Planned | Resilience, tracing, auth, evaluation, deployment |

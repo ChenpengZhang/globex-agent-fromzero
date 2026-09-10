@@ -1,6 +1,10 @@
 import uuid
 
-from fastapi import FastAPI, HTTPException
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    WebSocket,
+)
 from contextlib import asynccontextmanager
 
 from app.application.agents.orchestrator import (
@@ -14,6 +18,9 @@ from app.presentation.dto import (
     SubmitIntentRequest,
     SubmitIntentResponse,
 )
+from app.presentation.connection import (
+    ConnectionManager,
+)
 
 
 def build_app(
@@ -21,6 +28,10 @@ def build_app(
 ) -> FastAPI:
     runtime_container = container or build_container()
     # Leave space for fake offline container
+
+    connection_manager = ConnectionManager(
+        runtime_container.event_bus,
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -81,5 +92,11 @@ def build_app(
             ),
             final_text=result.final_text,
         )
+
+    @api.websocket("/commerce/events")
+    async def commerce_events(
+        websocket: WebSocket,
+    ) -> None:
+        await connection_manager.serve(websocket)
 
     return api

@@ -11,6 +11,8 @@ from app.application.agents.orchestrator import (
     SubmitIntentInput,
 )
 from app.application.agents.session_registry import SessionRegistry
+from app.application.events import TradeEventType
+from app.infrastructure.eventbus import InMemoryTradeEventBus
 from tests.fakes import ScriptedChatModel
 
 
@@ -91,8 +93,11 @@ async def test_orchestrator_builds_agent_message() -> None:
         tools=[],
     )
     sessions = SessionRegistry(factory)
+    event_bus = InMemoryTradeEventBus()
+    event_queue = event_bus.subscribe("session-001")
     orchestrator = MainAgentOrchestrator(
         sessions=sessions,
+        event_publisher=event_bus,
     )
 
     result = await orchestrator.handle_intent(
@@ -107,6 +112,17 @@ async def test_orchestrator_builds_agent_message() -> None:
 
     assert result.shopping_session_id == "session-001"
     assert result.final_text == "你好，我是 Globex。"
+
+    token_event = event_queue.get_nowait()
+    final_event = event_queue.get_nowait()
+    assert token_event.type is TradeEventType.TOKEN_DELTA
+    assert token_event.payload == {
+        "agent_name": "commerce_concierge",
+        "token": "你好，我是 Globex。",
+    }
+    assert final_event.type is TradeEventType.FINAL_RESULT
+    assert final_event.payload == {"text": "你好，我是 Globex。"}
+    assert event_queue.empty()
 
     assert len(model.calls) == 1
 

@@ -9,5 +9,5 @@ def create_chat_model(settings: Settings) -> OpenAIChatModel:
         api_key=settings.llm_api_key,
         base_url=settings.llm_base_url
     )
-    return OpenAIChatModel(model=settings.llm_model, credential=credential, stream=False)
+    return OpenAIChatModel(model=settings.llm_model, credential=credential, stream=True)
                                   

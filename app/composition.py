@@ -22,6 +22,9 @@ from app.infrastructure.rag.category_knowledge import (
 from app.infrastructure.rerank.http_reranker import (
     HttpReranker,
 )
+from app.infrastructure.eventbus import (
+    InMemoryTradeEventBus,
+)
 from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import (
     MainAgentOrchestrator,
@@ -80,6 +83,8 @@ class Container:
     product_repository: ProductRepository
     order_repository: OrderRepository
     knowledge_base: KnowledgeBase
+
+    event_bus: InMemoryTradeEventBus
 
     catalog_search: CatalogSearchUseCase
     place_order: PlaceOrderUseCase
@@ -197,8 +202,11 @@ def build_container() -> Container:
         main_agent_factory=main_agent_factory,
     )
 
+    event_bus = InMemoryTradeEventBus()
+
     orchestrator = MainAgentOrchestrator(
         sessions=sessions,
+        event_publisher=event_bus,
     )
 
     return Container(
@@ -208,6 +216,7 @@ def build_container() -> Container:
         embedder=embedder,
         vector_index=vector_index,
         knowledge_base=knowledge_base,
+        event_bus=event_bus,
         sessions=sessions,
         orchestrator=orchestrator,
         product_repository=product_repository,

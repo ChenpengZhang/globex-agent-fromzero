@@ -15,6 +15,7 @@ from app.infrastructure.context import (
     ShoppingContext,
     ShoppingContextSnapshot,
 )
+from app.infrastructure.eventbus import InMemoryTradeEventBus
 from tests.fakes import ScriptedChatModel
 
 
@@ -107,7 +108,8 @@ async def test_orchestrator_exposes_context_only_during_agent_reply() -> None:
     model = ContextCapturingChatModel()
     factory = MainAgentFactory(model=model, tools=[])
     orchestrator = MainAgentOrchestrator(
-        SessionRegistry(factory)
+        SessionRegistry(factory),
+        InMemoryTradeEventBus(),
     )
 
     result = await orchestrator.handle_intent(

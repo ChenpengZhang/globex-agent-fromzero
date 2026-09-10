@@ -14,6 +14,7 @@ from app.application.agents.session_registry import (
     SessionOwnershipError,
     SessionRegistry,
 )
+from app.infrastructure.eventbus import InMemoryTradeEventBus
 from tests.fakes import ScriptedChatModel
 
 
@@ -114,7 +115,10 @@ async def test_orchestrator_isolates_context_between_sessions() -> None:
         ),
     ]
     sessions, _ = build_registry(responses)
-    orchestrator = MainAgentOrchestrator(sessions)
+    orchestrator = MainAgentOrchestrator(
+        sessions,
+        InMemoryTradeEventBus(),
+    )
 
     await orchestrator.handle_intent(
         SubmitIntentInput(
@@ -172,7 +176,10 @@ async def test_same_session_retains_multiple_turns() -> None:
         ),
     ]
     sessions, _ = build_registry(responses)
-    orchestrator = MainAgentOrchestrator(sessions)
+    orchestrator = MainAgentOrchestrator(
+        sessions,
+        InMemoryTradeEventBus(),
+    )
 
     for query in ("第一轮问题", "第二轮问题"):
         await orchestrator.handle_intent(

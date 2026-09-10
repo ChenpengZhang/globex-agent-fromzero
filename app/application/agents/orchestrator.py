@@ -1,5 +1,12 @@
 from dataclasses import dataclass
+from agentscope.agent import Agent
+from agentscope.event import TextBlockDeltaEvent
+from agentscope.message import Msg, UserMsg
 
+from app.application.events import (
+    EventPublisher,
+    TradeEventType,
+)
 from app.application.agents.session_registry import (
     SessionRegistry,
 )
@@ -8,8 +15,6 @@ from app.infrastructure.context import (
     ShoppingContext,
     ShoppingContextSnapshot,
 )
-
-from agentscope.message import UserMsg
 
 
 @dataclass(frozen=True)
@@ -74,9 +79,11 @@ class SubmitIntentOutput:
 class MainAgentOrchestrator:
     def __init__(
         self,
-        sessions: SessionRegistry
+        sessions: SessionRegistry,
+        event_publisher: EventPublisher,
     ) -> None:
         self._sessions = sessions
+        self._event_publisher = event_publisher
 
     async def handle_intent(
         self,
@@ -119,9 +126,32 @@ class MainAgentOrchestrator:
             # make sure use the token to clear the ShoppingContext
 
             try:
-                reply = await session.agent.reply(
-                    [user_message],
+                final_text = await self._consume_reply(
+                    agent = session.agent,
+                    user_message = user_message,
+                    shopping_session_id =(
+                        intent.shopping_session_id
+                    ),
                 )
+
+                self._event_publisher.publish(
+                    intent.shopping_session_id,
+                    TradeEventType.FINAL_RESULT,
+                    {
+                        "text": final_text,
+                    },
+                )
+
+            except Exception as error:
+                self._event_publisher.publish(
+                    intent.shopping_session_id,
+                    TradeEventType.ERROR,
+                    {
+                        "message": str(error),
+                    },
+                )
+                raise
+
             finally:
                 ShoppingContext.reset(reset_token)
 
@@ -130,6 +160,36 @@ class MainAgentOrchestrator:
             shopping_session_id=(
                 intent.shopping_session_id
             ),
-            final_text=reply.get_text_content() or "",
+            final_text=final_text,
         )
+
+    async def _consume_reply(
+        self,
+        agent: Agent,
+        user_message: UserMsg,
+        shopping_session_id: str,
+    ) -> str:
+        final_text = ""
+
+        async for event in agent.reply_stream(
+            [user_message],
+            yield_final_msg=True,
+        ):
+            if isinstance(event, TextBlockDeltaEvent):
+                if event.delta:
+                    self._event_publisher.publish(
+                        shopping_session_id,
+                        TradeEventType.TOKEN_DELTA,
+                        {
+                            "agent_name": agent.name,
+                            "token": event.delta,
+                        },
+                    )
+
+            elif isinstance(event, Msg):
+                final_text = (
+                    event.get_text_content() or ""
+                )
+
+        return final_text
     

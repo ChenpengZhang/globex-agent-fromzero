@@ -114,9 +114,10 @@ InMemoryOrderRepository + Application DTO
 - 基于 Markdown 切分和 Qdrant 的品类知识 RAG。
 - 选购知识与具体商品事实的显式边界。
 - 商品向量索引、可选 Rerank 和显式降级链。
+- 类型化实时事件、token 流式输出和会话级 WebSocket 推送。
 - Domain、UseCase、Tool、RAG、HTTP 和会话的离线测试。
 
-当前共有 206 项测试通过。
+当前共有 211 项测试通过。
 
 ## 启动方式
 
@@ -182,8 +183,8 @@ uv run pytest
 | 11. 子 Agent | 已完成 | SearchAgent、TradeAgent、任务派发和隔离 |
 | 12. 品类知识 RAG | 已完成 | Markdown 导入、Embedding、Qdrant 和知识工具 |
 | 13. 商品分级检索 | 已完成 | 商品 Embedding、Rerank 和显式降级链 |
-| 14. 实时事件 | 当前章节 | 类型化事件、流式回复和 WebSocket 推送 |
-| 15. 前端 | 计划中 | React 对话、商品/订单卡和事件时间线 |
+| 14. 实时事件 | 已完成 | 类型化事件、流式回复和 WebSocket 推送 |
+| 15. 前端 | 当前章节 | React 对话、商品/订单卡和事件时间线 |
 | 16. 持久化与记忆 | 计划中 | SQLite、会话恢复、对话和偏好 |
 | 17. Redis 与异步化 | 计划中 | 缓存、幂等、队列和跨进程事件 |
 | 18. 生产强化 | 计划中 | 韧性、Tracing、鉴权、评测和部署 |
