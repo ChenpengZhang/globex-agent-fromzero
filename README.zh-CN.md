@@ -115,9 +115,11 @@ InMemoryOrderRepository + Application DTO
 - 选购知识与具体商品事实的显式边界。
 - 商品向量索引、可选 Rerank 和显式降级链。
 - 类型化实时事件、token 流式输出和会话级 WebSocket 推送。
+- 响应式 React 购物对话页，以及 HTTP 提交与 WebSocket 流式接入。
+- 浏览器 buyer/session 身份持久化、断线重连和事件时间线。
 - Domain、UseCase、Tool、RAG、HTTP 和会话的离线测试。
 
-当前共有 211 项测试通过。
+当前共有 211 项后端测试通过，前端也已通过 TypeScript 与 Vite 生产构建。
 
 ## 启动方式
 
@@ -158,6 +160,17 @@ uv run python -m app.presentation.cli
 uv run uvicorn app.presentation.server:build_app --factory
 ```
 
+在另一个终端中启动 React 前端：
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+然后访问 `http://127.0.0.1:5173`。Vite 会把 `/commerce` 的 HTTP 与
+WebSocket 流量代理到 8000 端口的后端。
+
 运行测试：
 
 ```bash
@@ -184,8 +197,8 @@ uv run pytest
 | 12. 品类知识 RAG | 已完成 | Markdown 导入、Embedding、Qdrant 和知识工具 |
 | 13. 商品分级检索 | 已完成 | 商品 Embedding、Rerank 和显式降级链 |
 | 14. 实时事件 | 已完成 | 类型化事件、流式回复和 WebSocket 推送 |
-| 15. 前端 | 当前章节 | React 对话、商品/订单卡和事件时间线 |
-| 16. 持久化与记忆 | 计划中 | SQLite、会话恢复、对话和偏好 |
+| 15. 前端 | 已完成 | React 对话、流式输出、会话身份、预备卡片和事件时间线 |
+| 16. 持久化与记忆 | 当前章节 | SQLite、会话恢复、对话和偏好 |
 | 17. Redis 与异步化 | 计划中 | 缓存、幂等、队列和跨进程事件 |
 | 18. 生产强化 | 计划中 | 韧性、Tracing、鉴权、评测和部署 |
 

@@ -115,9 +115,12 @@ Place / Query / Cancel Order UseCases
 - Explicit separation between selection knowledge and product facts.
 - Product-vector indexing, optional reranking, and explicit fallbacks.
 - Typed realtime events, token streaming, and session-scoped WebSocket delivery.
+- Responsive React shopping chat with HTTP submission and WebSocket streaming.
+- Persistent browser buyer/session identities, reconnect handling, and event timeline.
 - Offline tests for Domain, UseCases, Tools, RAG, HTTP, and sessions.
 
-The current suite contains 211 passing tests.
+The current suite contains 211 passing backend tests. The frontend also passes its
+TypeScript and production Vite build.
 
 ## Setup
 
@@ -158,6 +161,17 @@ Run the HTTP API:
 uv run uvicorn app.presentation.server:build_app --factory
 ```
 
+In another terminal, run the React frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open `http://127.0.0.1:5173`. Vite proxies both HTTP and WebSocket
+`/commerce` traffic to the backend on port 8000.
+
 Run the test suite:
 
 ```bash
@@ -184,8 +198,8 @@ Do not commit real API keys or other secrets.
 | 12. Category-Knowledge RAG | Complete | Markdown ingestion, embeddings, Qdrant, knowledge tool |
 | 13. Tiered Product Retrieval | Complete | Product embeddings, reranking, explicit fallbacks |
 | 14. Realtime Events | Complete | Typed events, streaming, WebSocket delivery |
-| 15. Frontend | Current | React chat, product/order cards, event timeline |
-| 16. Persistence and Memory | Planned | SQLite, session recovery, conversations, preferences |
+| 15. Frontend | Complete | React chat, streaming, session identity, prepared cards, event timeline |
+| 16. Persistence and Memory | Current | SQLite, session recovery, conversations, preferences |
 | 17. Redis and Async Work | Planned | Caches, idempotency, queue, cross-process events |
 | 18. Production Hardening | Planned | Resilience, tracing, auth, evaluation, deployment |
 
