@@ -119,7 +119,7 @@ InMemoryOrderRepository + Application DTO
 - 浏览器 buyer/session 身份持久化、断线重连和事件时间线。
 - Domain、UseCase、Tool、RAG、HTTP 和会话的离线测试。
 
-当前共有 211 项后端测试通过，前端也已通过 TypeScript 与 Vite 生产构建。
+当前共有 267 项后端测试通过，前端也已通过 TypeScript 与 Vite 生产构建。
 
 ## 启动方式
 
@@ -199,8 +199,8 @@ uv run pytest
 | 14. 实时事件 | 已完成 | 类型化事件、流式回复和 WebSocket 推送 |
 | 15. 前端 | 已完成 | React 对话、流式输出、会话身份、预备卡片和事件时间线 |
 | 16. 文件持久化与恢复 | 已完成 | JSON Session 快照、JSONL 对话流水和历史恢复 |
-| 17. 关系型数据库持久化 | 下一章 | 异步 SQLAlchemy、SQLite Schema、数据库 Adapter 和组装切换 |
-| 18. 买家长期记忆 | 计划中 | 偏好、记住/忘记工具、相关性筛选和 hint 注入 |
+| 17. 关系型数据库持久化 | 已完成 | 异步 SQLAlchemy、SQLite Schema、数据库 Adapter 和组装切换 |
+| 18. 买家长期记忆 | 下一章 | 偏好、记住/忘记工具、相关性筛选和 hint 注入 |
 | 19. Redis 与异步化 | 计划中 | 缓存、幂等、队列和跨进程事件 |
 | 20. 生产强化 | 计划中 | 韧性、Tracing、鉴权、评测和部署 |
 

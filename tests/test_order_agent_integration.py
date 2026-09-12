@@ -13,6 +13,9 @@ import app.composition as composition
 from app.application.agents.orchestrator import SubmitIntentInput
 from app.domain.order.order import OrderStatus
 from app.infrastructure.context import ShoppingContext
+from app.infrastructure.persistence.sql.database import (
+    bootstrap_schema,
+)
 from tests.fakes import (
     DeterministicEmbeddingClient,
     EmptyKnowledgeBase,
@@ -147,6 +150,7 @@ async def test_agent_places_queries_and_cancels_order_in_one_session(
         lambda settings: RecordingProductVectorIndex(),
     )
     container = composition.build_container()
+    await bootstrap_schema(container.database_engine)
 
     product = await container.product_repository.find_by_id("P1001")
     assert product is not None
@@ -235,3 +239,4 @@ async def test_agent_places_queries_and_cancels_order_in_one_session(
     assert stored.status is OrderStatus.CANCELLED
     assert sku.stock == initial_stock
     assert ShoppingContext.current() is None
+    await container.database_engine.dispose()

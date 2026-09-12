@@ -10,6 +10,8 @@ dependencies = [
     "qdrant-client>=1.19.0",
     "uvicorn[standard]>=0.52.4",
     "httpx>=0.28.1",
+    "sqlalchemy[asyncio]>=2,<3",
+    "aiosqlite>=0.20,<1",
 ]
 
 [tool.uv.workspace]

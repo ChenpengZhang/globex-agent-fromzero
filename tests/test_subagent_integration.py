@@ -15,6 +15,9 @@ from app.application.agents.orchestrator import (
 )
 from app.domain.order.order import OrderStatus
 from app.infrastructure.context import ShoppingContext
+from app.infrastructure.persistence.sql.database import (
+    bootstrap_schema,
+)
 from tests.fakes import (
     DeterministicEmbeddingClient,
     EmptyKnowledgeBase,
@@ -142,6 +145,7 @@ async def test_main_agent_dispatches_isolated_search_agent(
         lambda settings: RecordingProductVectorIndex(),
     )
     container = composition.build_container()
+    await bootstrap_schema(container.database_engine)
 
     reply = await container.orchestrator.handle_intent(
         SubmitIntentInput(
@@ -202,6 +206,7 @@ async def test_main_agent_dispatches_isolated_search_agent(
         for text in main_results
     )
     assert ShoppingContext.current() is None
+    await container.database_engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -280,6 +285,7 @@ async def test_trade_agent_dispatch_preserves_buyer_context(
         lambda settings: RecordingProductVectorIndex(),
     )
     container = composition.build_container()
+    await bootstrap_schema(container.database_engine)
 
     product = await container.product_repository.find_by_id(
         "P1001"
@@ -334,3 +340,4 @@ async def test_trade_agent_dispatch_preserves_buyer_context(
     assert stored.status is OrderStatus.CONFIRMED
     assert sku.stock == initial_stock - 2
     assert ShoppingContext.current() is None
+    await container.database_engine.dispose()

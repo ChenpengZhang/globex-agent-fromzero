@@ -119,7 +119,7 @@ Place / Query / Cancel Order UseCases
 - Persistent browser buyer/session identities, reconnect handling, and event timeline.
 - Offline tests for Domain, UseCases, Tools, RAG, HTTP, and sessions.
 
-The current suite contains 211 passing backend tests. The frontend also passes its
+The current suite contains 267 passing backend tests. The frontend also passes its
 TypeScript and production Vite build.
 
 ## Setup
@@ -200,8 +200,8 @@ Do not commit real API keys or other secrets.
 | 14. Realtime Events | Complete | Typed events, streaming, WebSocket delivery |
 | 15. Frontend | Complete | React chat, streaming, session identity, prepared cards, event timeline |
 | 16. File Persistence and Recovery | Complete | JSON session snapshots, JSONL conversations, history recovery |
-| 17. Relational Database Persistence | Next | Async SQLAlchemy, SQLite schema, database adapters, composition switch |
-| 18. Long-Term Buyer Memory | Planned | Preferences, remember/forget tools, relevance selection, hint injection |
+| 17. Relational Database Persistence | Complete | Async SQLAlchemy, SQLite schema, database adapters, composition switch |
+| 18. Long-Term Buyer Memory | Next | Preferences, remember/forget tools, relevance selection, hint injection |
 | 19. Redis and Async Work | Planned | Caches, idempotency, queue, cross-process events |
 | 20. Production Hardening | Planned | Resilience, tracing, auth, evaluation, deployment |
 

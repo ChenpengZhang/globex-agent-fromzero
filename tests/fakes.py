@@ -27,6 +27,7 @@ def build_composition_settings(
         data_dir=Path(
             "/private/tmp/globex-agent-fromzero-tests",
         ),
+        database_url="sqlite+aiosqlite:///:memory:",
     )
 
 

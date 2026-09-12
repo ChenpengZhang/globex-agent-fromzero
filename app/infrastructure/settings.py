@@ -25,7 +25,9 @@ class Settings:
     qdrant_url: str
     category_kb_collection: str
     product_vector_collection: str
+
     data_dir: Path
+    database_url: str
 
 
 def load_settings() -> Settings:
@@ -90,7 +92,18 @@ def load_settings() -> Settings:
     data_dir = Path(raw_data_dir)
 
     if not data_dir.is_absolute():
-        data_dir = PROJECT_ROOT / data_dir
+        data_dir = PROJECT_ROOT / raw_data_dir
+
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "",
+    ).strip()
+
+    if not database_url:
+        database_url = (
+            f"sqlite+aiosqlite:///"
+            f"{data_dir / 'globex.db'}"
+        )
 
     return Settings(
         llm_base_url=llm_base_url,
@@ -121,4 +134,5 @@ def load_settings() -> Settings:
             "",
         ).strip(),
         data_dir=data_dir,
+        database_url=database_url,
     )

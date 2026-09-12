@@ -26,6 +26,9 @@ from app.infrastructure.persistence.in_memory_product_repository import (
     InMemoryProductRepository,
 )
 from app.infrastructure.persistence.seed_products import build_seed_products
+from app.infrastructure.persistence.sql.database import (
+    create_database_engine,
+)
 from app.infrastructure.eventbus import InMemoryTradeEventBus
 from app.presentation.server import build_app
 from tests.fakes import (
@@ -109,6 +112,9 @@ def build_test_container(
             event_bus=event_bus,
             conversation_store=conversation_store,
             get_conversation_history=get_conversation_history,
+            database_engine=create_database_engine(
+                "sqlite+aiosqlite:///:memory:",
+            ),
             sessions=sessions,
             orchestrator=orchestrator,
             product_repository=repository,

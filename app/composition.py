@@ -2,15 +2,26 @@ from dataclasses import dataclass
 
 from agentscope.tool import FunctionTool
 from agentscope.rag import KnowledgeBase
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    async_sessionmaker,
+)
 
+from app.infrastructure.persistence.sql.database import (
+    bootstrap_schema,
+    create_database_engine,
+)
+from app.infrastructure.persistence.sql.sql_conversation_store import (
+    SqlConversationStore,
+)
+from app.infrastructure.persistence.sql.sql_session_store import (
+    SqlSessionStore,
+)
 from app.domain.catalog.ports.retrieval_ports import (
     EmbeddingClient,
 )
 from app.domain.session.ports.conversation_store import (
     ConversationStore,
-)
-from app.infrastructure.persistence.json_file_conversation_store import (
-    JsonFileConversationStore,
 )
 from app.infrastructure.embedding.openai_embedding_client import (
     OpenAIEmbeddingClient,
@@ -30,9 +41,6 @@ from app.infrastructure.rerank.http_reranker import (
 )
 from app.infrastructure.eventbus import (
     InMemoryTradeEventBus,
-)
-from app.infrastructure.persistence.json_file_session_store import (
-    JsonFileSessionStore,
 )
 from app.application.agents.main_agent import MainAgentFactory
 from app.application.agents.orchestrator import (
@@ -99,6 +107,7 @@ class Container:
     event_bus: InMemoryTradeEventBus
     conversation_store: ConversationStore
     get_conversation_history: GetConversationHistoryUseCase
+    database_engine: AsyncEngine
 
     catalog_search: CatalogSearchUseCase
     place_order: PlaceOrderUseCase
@@ -111,6 +120,10 @@ class Container:
 
     async def startup(self) -> None:
         """Initialize external resources and searchable data."""
+        await bootstrap_schema(
+            self.database_engine,
+        )
+
         await self.knowledge_base.vector_store.__aenter__()
 
         await bootstrap_product_index(
@@ -125,17 +138,30 @@ class Container:
 
     async def shutdown(self) -> None:
         """Release external resources."""
+
         try:
             await self.vector_index.close()
         finally:
-            await self.knowledge_base.vector_store.__aexit__(
-                None,
-                None,
-                None,
-            )
+            try:
+                await self.knowledge_base.vector_store.__aexit__(
+                    None,
+                    None,
+                    None,
+                )
+            finally:
+                await self.database_engine.dispose()
 
 def build_container() -> Container:
     settings = load_settings()
+
+    database_engine = create_database_engine(
+        settings.database_url,
+    )
+
+    session_factory = async_sessionmaker(
+        database_engine,
+        expire_on_commit=False,
+    )
 
     embedder = OpenAIEmbeddingClient(settings)
 
@@ -212,8 +238,8 @@ def build_container() -> Container:
         ],
     )
 
-    session_store = JsonFileSessionStore(
-        settings.data_dir,
+    session_store = SqlSessionStore(
+        session_factory,
     )
 
     sessions = SessionRegistry(
@@ -223,8 +249,8 @@ def build_container() -> Container:
 
     event_bus = InMemoryTradeEventBus()
 
-    conversation_store = JsonFileConversationStore(
-        settings.data_dir,
+    conversation_store = SqlConversationStore(
+        session_factory,
     )
 
     get_conversation_history = GetConversationHistoryUseCase(
@@ -246,6 +272,7 @@ def build_container() -> Container:
         knowledge_base=knowledge_base,
         event_bus=event_bus,
         conversation_store=conversation_store,
+        database_engine=database_engine,
         get_conversation_history=get_conversation_history,
         sessions=sessions,
         orchestrator=orchestrator,
