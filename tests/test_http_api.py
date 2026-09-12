@@ -35,6 +35,7 @@ from tests.fakes import (
     DeterministicEmbeddingClient,
     EmptyKnowledgeBase,
     InMemoryConversationStore,
+    InMemoryPreferenceStore,
     InMemorySessionStore,
     RecordingProductVectorIndex,
     ScriptedChatModel,
@@ -94,6 +95,7 @@ def build_test_container(
     )
     event_bus = InMemoryTradeEventBus()
     conversation_store = InMemoryConversationStore()
+    preference_store = InMemoryPreferenceStore()
     get_conversation_history = GetConversationHistoryUseCase(
         conversation_store,
     )
@@ -101,6 +103,7 @@ def build_test_container(
         sessions=sessions,
         event_bus=event_bus,
         conversation_store=conversation_store,
+        preference_store=preference_store,
     )
 
     return (
@@ -111,6 +114,7 @@ def build_test_container(
             knowledge_base=knowledge_base,  # type: ignore[arg-type]
             event_bus=event_bus,
             conversation_store=conversation_store,
+            preference_store=preference_store,
             get_conversation_history=get_conversation_history,
             database_engine=create_database_engine(
                 "sqlite+aiosqlite:///:memory:",

@@ -175,6 +175,8 @@ async def test_main_agent_dispatches_isolated_search_agent(
         "query_order_tool",
         "cancel_order_tool",
         "category_insight_tool",
+        "remember_preference_tool",
+        "forget_preference_tool",
         "task_dispatch",
     }
 

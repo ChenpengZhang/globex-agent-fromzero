@@ -11,10 +11,68 @@ from agentscope.message import Msg
 from agentscope.model import ChatModelBase, ChatResponse
 from agentscope.tool import ToolChoice
 
+from app.domain.buyer.preference import BuyerPreference
 from app.domain.session.ports.conversation_store import (
     ConversationEventRecord,
     ConversationTurn,
 )
+
+
+class InMemoryPreferenceStore:
+    """PreferenceStore test double with deterministic ordering."""
+
+    def __init__(self) -> None:
+        self.preferences: list[BuyerPreference] = []
+
+    async def append(
+        self,
+        preference: BuyerPreference,
+    ) -> None:
+        identity = (
+            preference.buyer_id,
+            preference.kind,
+            preference.statement,
+        )
+
+        if any(
+            (
+                existing.buyer_id,
+                existing.kind,
+                existing.statement,
+            )
+            == identity
+            for existing in self.preferences
+        ):
+            return
+
+        self.preferences.append(preference)
+
+    async def list_by_buyer(
+        self,
+        buyer_id: str,
+    ) -> list[BuyerPreference]:
+        return [
+            preference
+            for preference in self.preferences
+            if preference.buyer_id == buyer_id
+        ]
+
+    async def delete(
+        self,
+        buyer_id: str,
+        statement: str,
+    ) -> bool:
+        remaining = [
+            preference
+            for preference in self.preferences
+            if not (
+                preference.buyer_id == buyer_id
+                and preference.statement == statement
+            )
+        ]
+        deleted = len(remaining) != len(self.preferences)
+        self.preferences = remaining
+        return deleted
 
 
 def build_composition_settings(
@@ -24,6 +82,9 @@ def build_composition_settings(
     """Small settings double for fully monkeypatched composition tests."""
     return SimpleNamespace(
         reranker_base_url=reranker_base_url,
+        preference_relevance_enabled=False,
+        preference_top_k=5,
+        preference_subagent_inject=True,
         data_dir=Path(
             "/private/tmp/globex-agent-fromzero-tests",
         ),

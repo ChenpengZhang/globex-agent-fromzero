@@ -7,6 +7,19 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
+from app.application.memory.preference_selector import (
+    PreferenceSelector,
+)
+from app.application.tools.preference_tools import (
+    build_forget_preference_tool,
+    build_remember_preference_tool,
+)
+from app.domain.buyer.ports.preference_store import (
+    PreferenceStore,
+)
+from app.infrastructure.persistence.sql.sql_preference_store import (
+    SqlPreferenceStore,
+)
 from app.infrastructure.persistence.sql.database import (
     bootstrap_schema,
     create_database_engine,
@@ -106,6 +119,7 @@ class Container:
 
     event_bus: InMemoryTradeEventBus
     conversation_store: ConversationStore
+    preference_store: PreferenceStore
     get_conversation_history: GetConversationHistoryUseCase
     database_engine: AsyncEngine
 
@@ -219,11 +233,51 @@ def build_container() -> Container:
         cancel_order=cancel_order,
     )
 
+    event_bus = InMemoryTradeEventBus()
+
+    preference_store = SqlPreferenceStore(
+        session_factory,
+    )
+
+    preference_selector = PreferenceSelector(
+        embedder=embedder,
+        relevance_enabled=(
+            settings.preference_relevance_enabled
+        ),
+    )
+
+    remember_preference_function = (
+        build_remember_preference_tool(
+            store=preference_store,
+            event_publisher=event_bus,
+        )
+    )
+    remember_preference_tool = FunctionTool(
+        remember_preference_function,
+        is_read_only=False,
+    )
+
+    forget_preference_function = (
+        build_forget_preference_tool(
+            store=preference_store,
+            event_publisher=event_bus,
+        )
+    )
+    forget_preference_tool = FunctionTool(
+        forget_preference_function,
+        is_read_only=False,
+    )
+
     task_dispatch_function = build_task_dispatch_tool(
         search_factory=search_agent_factory,
         trade_factory=trade_agent_factory,
+        preference_store=preference_store,
+        preference_selector=preference_selector,
+        preference_top_k=settings.preference_top_k,
+        inject_preferences=(
+            settings.preference_subagent_inject
+        ),
     )
-
     task_dispatch_tool = FunctionTool(
         task_dispatch_function,
         is_read_only=False,
@@ -234,6 +288,8 @@ def build_container() -> Container:
         tools=[
             *search_agent_factory.build_tools(),
             *trade_agent_factory.build_tools(),
+            remember_preference_tool,
+            forget_preference_tool,
             task_dispatch_tool,
         ],
     )
@@ -247,8 +303,6 @@ def build_container() -> Container:
         session_store=session_store,
     )
 
-    event_bus = InMemoryTradeEventBus()
-
     conversation_store = SqlConversationStore(
         session_factory,
     )
@@ -261,6 +315,9 @@ def build_container() -> Container:
         sessions=sessions,
         event_bus=event_bus,
         conversation_store=conversation_store,
+        preference_store=preference_store,
+        preference_selector=preference_selector,
+        preference_top_k=settings.preference_top_k,
     )
 
     return Container(
@@ -272,6 +329,7 @@ def build_container() -> Container:
         knowledge_base=knowledge_base,
         event_bus=event_bus,
         conversation_store=conversation_store,
+        preference_store=preference_store,
         database_engine=database_engine,
         get_conversation_history=get_conversation_history,
         sessions=sessions,

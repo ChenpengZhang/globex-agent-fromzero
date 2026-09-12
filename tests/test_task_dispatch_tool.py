@@ -12,6 +12,12 @@ from agentscope.tool import FunctionTool
 from app.application.tools.task_dispatch_tool import (
     build_task_dispatch_tool,
 )
+from app.domain.buyer.preference import BuyerPreference
+from app.infrastructure.context import (
+    ShoppingContext,
+    ShoppingContextSnapshot,
+)
+from tests.fakes import InMemoryPreferenceStore
 
 
 @dataclass
@@ -189,3 +195,176 @@ async def test_task_dispatch_rejects_unknown_agent_type() -> None:
     )
     assert not search_factory.workers
     assert not trade_factory.workers
+
+
+@pytest.mark.asyncio
+async def test_search_agent_receives_current_buyer_preferences() -> None:
+    preference_store = InMemoryPreferenceStore()
+    await preference_store.append(
+        BuyerPreference(
+            buyer_id="buyer-001",
+            kind="dislike",
+            statement="不要塑料材质",
+        )
+    )
+    search_factory = RecordingFactory("search result")
+    dispatcher = build_task_dispatch_tool(
+        search_factory=search_factory,  # type: ignore[arg-type]
+        trade_factory=RecordingFactory(  # type: ignore[arg-type]
+            "trade result",
+        ),
+        preference_store=preference_store,
+    )
+    reset_token = ShoppingContext.set(
+        ShoppingContextSnapshot(
+            shopping_session_id="session-001",
+            buyer_id="buyer-001",
+            locale="zh-CN",
+            currency="CNY",
+        )
+    )
+
+    try:
+        await dispatcher(
+            subagent_type="search_agent",
+            demands="推荐一个水杯",
+        )
+    finally:
+        ShoppingContext.reset(reset_token)
+
+    messages = search_factory.workers[0].calls[0]
+
+    assert [message.name for message in messages] == [
+        "memory_hint",
+        "commerce_concierge",
+    ]
+    assert "[dislike] 不要塑料材质" in (
+        messages[0].get_text_content() or ""
+    )
+    assert messages[1].get_text_content() == "推荐一个水杯"
+
+
+@pytest.mark.asyncio
+async def test_trade_agent_does_not_receive_preference_hint() -> None:
+    preference_store = InMemoryPreferenceStore()
+    await preference_store.append(
+        BuyerPreference(
+            buyer_id="buyer-001",
+            kind="like",
+            statement="喜欢小众设计",
+        )
+    )
+    trade_factory = RecordingFactory("trade result")
+    dispatcher = build_task_dispatch_tool(
+        search_factory=RecordingFactory(  # type: ignore[arg-type]
+            "search result",
+        ),
+        trade_factory=trade_factory,  # type: ignore[arg-type]
+        preference_store=preference_store,
+    )
+    reset_token = ShoppingContext.set(
+        ShoppingContextSnapshot(
+            shopping_session_id="session-001",
+            buyer_id="buyer-001",
+            locale="zh-CN",
+            currency="CNY",
+        )
+    )
+
+    try:
+        await dispatcher(
+            subagent_type="trade_agent",
+            demands="查询订单 ORD-001",
+        )
+    finally:
+        ShoppingContext.reset(reset_token)
+
+    messages = trade_factory.workers[0].calls[0]
+
+    assert [message.name for message in messages] == [
+        "commerce_concierge",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_preferences_do_not_cross_buyer_boundary() -> None:
+    preference_store = InMemoryPreferenceStore()
+    await preference_store.append(
+        BuyerPreference(
+            buyer_id="buyer-A",
+            kind="like",
+            statement="喜欢小众设计",
+        )
+    )
+    search_factory = RecordingFactory("search result")
+    dispatcher = build_task_dispatch_tool(
+        search_factory=search_factory,  # type: ignore[arg-type]
+        trade_factory=RecordingFactory(  # type: ignore[arg-type]
+            "trade result",
+        ),
+        preference_store=preference_store,
+    )
+    reset_token = ShoppingContext.set(
+        ShoppingContextSnapshot(
+            shopping_session_id="session-B",
+            buyer_id="buyer-B",
+            locale="zh-CN",
+            currency="CNY",
+        )
+    )
+
+    try:
+        await dispatcher(
+            subagent_type="search_agent",
+            demands="推荐一个水杯",
+        )
+    finally:
+        ShoppingContext.reset(reset_token)
+
+    messages = search_factory.workers[0].calls[0]
+
+    assert [message.name for message in messages] == [
+        "commerce_concierge",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_preference_failure_does_not_block_dispatch() -> None:
+    class FailingPreferenceStore(InMemoryPreferenceStore):
+        async def list_by_buyer(
+            self,
+            buyer_id: str,
+        ) -> list[BuyerPreference]:
+            raise RuntimeError("database unavailable")
+
+    search_factory = RecordingFactory("search result")
+    dispatcher = build_task_dispatch_tool(
+        search_factory=search_factory,  # type: ignore[arg-type]
+        trade_factory=RecordingFactory(  # type: ignore[arg-type]
+            "trade result",
+        ),
+        preference_store=FailingPreferenceStore(),
+    )
+    reset_token = ShoppingContext.set(
+        ShoppingContextSnapshot(
+            shopping_session_id="session-001",
+            buyer_id="buyer-001",
+            locale="zh-CN",
+            currency="CNY",
+        )
+    )
+
+    try:
+        result = await dispatcher(
+            subagent_type="search_agent",
+            demands="推荐一个水杯",
+        )
+    finally:
+        ShoppingContext.reset(reset_token)
+
+    assert result.state == ToolResultState.SUCCESS
+    assert result.content[0].text == "search result"
+    assert [
+        message.name
+        for message in search_factory.workers[0].calls[0]
+    ] == ["commerce_concierge"]

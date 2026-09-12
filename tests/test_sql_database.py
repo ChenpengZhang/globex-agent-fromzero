@@ -83,6 +83,7 @@ async def test_bootstrap_is_idempotent_and_preserves_data(
 
         assert table_names == {
             "agent_session_states",
+            "buyer_preferences",
             "conversation_events",
             "conversation_messages",
             "conversation_sessions",

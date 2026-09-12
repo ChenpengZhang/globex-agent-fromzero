@@ -29,6 +29,40 @@ class Settings:
     data_dir: Path
     database_url: str
 
+    preference_relevance_enabled: bool
+    preference_top_k: int
+    preference_subagent_inject: bool
+
+
+def _read_bool(
+    name: str,
+    default: bool,
+) -> bool:
+    default_value = "1" if default else "0"
+    raw_value = os.getenv(
+        name,
+        default_value,
+    ).strip().lower()
+
+    if raw_value in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return True
+
+    if raw_value in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
+        return False
+
+    raise RuntimeError(
+        f"{name} must be a boolean value"
+    )
 
 def load_settings() -> Settings:
     load_dotenv()
@@ -105,6 +139,28 @@ def load_settings() -> Settings:
             f"{data_dir / 'globex.db'}"
         )
 
+    preference_top_k = int(
+        os.getenv(
+            "PREFERENCE_TOP_K",
+            "5",
+        )
+    )
+
+    if preference_top_k < 0:
+        raise RuntimeError(
+            "PREFERENCE_TOP_K must be greater than or equal to zero"
+        )
+
+    preference_relevance_enabled = _read_bool(
+        "PREFERENCE_RELEVANCE_ENABLED",
+        False,
+    )
+
+    preference_subagent_inject = _read_bool(
+        "PREFERENCE_SUBAGENT_INJECT",
+        True,
+    )
+
     return Settings(
         llm_base_url=llm_base_url,
         llm_api_key=llm_api_key,
@@ -135,4 +191,11 @@ def load_settings() -> Settings:
         ).strip(),
         data_dir=data_dir,
         database_url=database_url,
+                preference_relevance_enabled=(
+            preference_relevance_enabled
+        ),
+        preference_top_k=preference_top_k,
+        preference_subagent_inject=(
+            preference_subagent_inject
+        ),
     )

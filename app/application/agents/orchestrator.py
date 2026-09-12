@@ -12,7 +12,14 @@ from app.domain.session.ports.conversation_store import (
     ConversationStore,
     ConversationTurn,
 )
-
+from app.application.memory.preference_selector import (
+    PreferenceSelector,
+    render_preference_hint,
+    render_preference_lines,
+)
+from app.domain.buyer.ports.preference_store import (
+    PreferenceStore,
+)
 from app.application.events import (
     EventBus,
     TradeEvent,
@@ -96,10 +103,20 @@ class MainAgentOrchestrator:
         sessions: SessionRegistry,
         event_bus: EventBus,
         conversation_store: ConversationStore | None = None,
+        preference_store: PreferenceStore | None = None,
+        preference_selector: PreferenceSelector | None = None,
+        preference_top_k: int = 5,
     ) -> None:
         self._sessions = sessions
         self._event_bus = event_bus
         self._conversation_store = conversation_store
+        self._preference_store = preference_store
+        self._preference_selector = (
+            preference_selector
+            or PreferenceSelector()
+        )
+        self._preference_top_k = preference_top_k
+        self._injected_preferences: dict[str, str] = {}
 
     async def handle_intent(
         self,
@@ -155,10 +172,15 @@ class MainAgentOrchestrator:
             # in order to avoid B to collect A's trace.
 
             try:
+                agent_inputs = await self._build_agent_inputs(
+                    intent=intent,
+                    user_message=user_message,
+                )
+
                 final_text = await self._consume_reply(
-                    agent = session.agent,
-                    user_message = user_message,
-                    shopping_session_id =(
+                    agent=session.agent,
+                    messages=agent_inputs,
+                    shopping_session_id=(
                         intent.shopping_session_id
                     ),
                 )
@@ -260,7 +282,7 @@ class MainAgentOrchestrator:
                     session_id=intent.shopping_session_id,
                     buyer_id=intent.buyer_id,
                     role="buyer",
-                    content=intent.raw_query,
+                    content=intent.raw_query,  # only save raw query
                 )
             )
 
@@ -288,16 +310,83 @@ class MainAgentOrchestrator:
                 error,
             )
 
+    async def _build_agent_inputs(
+        self,
+        intent: SubmitIntentInput,
+        user_message: UserMsg,
+    ) -> list[Msg]:
+        """Add relevant buyer preferences to the current turn."""
+
+        if self._preference_store is None:
+            return [user_message]
+
+        try:
+            preferences = (
+                await self._preference_store.list_by_buyer(
+                    intent.buyer_id,
+                )
+            )
+
+            selected = (
+                await self._preference_selector.select(
+                    preferences=preferences,
+                    query=intent.raw_query,
+                    top_k=self._preference_top_k,
+                )
+            )
+        except Exception as error:
+            logger.warning(
+                "Buyer preference loading failed; "
+                "continuing without a memory hint: %s",
+                error,
+            )
+            return [user_message]
+
+        if not selected:
+            self._injected_preferences.pop(
+                intent.shopping_session_id,
+                None,
+            )
+            return [user_message]
+
+        rendered = render_preference_lines(
+            selected,
+        )
+
+        if (
+            self._injected_preferences.get(
+                intent.shopping_session_id,
+            )
+            == rendered
+        ):
+            return [user_message]
+
+        self._injected_preferences[
+            intent.shopping_session_id
+        ] = rendered
+
+        memory_hint = UserMsg(
+            name="memory_hint",
+            content=render_preference_hint(
+                selected,
+            ),
+        )
+
+        return [
+            memory_hint,
+            user_message,
+        ]
+
     async def _consume_reply(
         self,
         agent: Agent,
-        user_message: UserMsg,
+        messages: list[Msg],
         shopping_session_id: str,
     ) -> str:
         final_text = ""
 
         async for event in agent.reply_stream(
-            [user_message],
+            messages,
             yield_final_msg=True,
         ):
             if isinstance(event, TextBlockDeltaEvent):
@@ -317,4 +406,3 @@ class MainAgentOrchestrator:
                 )
 
         return final_text
-    

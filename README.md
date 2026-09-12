@@ -98,6 +98,15 @@ InMemoryOrderRepository + Application DTOs
 Place / Query / Cancel Order UseCases
 ```
 
+Long-term buyer memory now follows a separate durable path:
+
+```text
+remember / forget tool → PreferenceStore → SQLite buyer_preferences
+                                              ↓
+new request → PreferenceSelector → buyer-scoped hint → MainAgent
+                                                   └→ SearchAgent when dispatched
+```
+
 ## Current Capabilities
 
 - Minimal single-Agent runtime and real ChatModel integration.
@@ -117,9 +126,12 @@ Place / Query / Cancel Order UseCases
 - Typed realtime events, token streaming, and session-scoped WebSocket delivery.
 - Responsive React shopping chat with HTTP submission and WebSocket streaming.
 - Persistent browser buyer/session identities, reconnect handling, and event timeline.
+- Buyer-scoped long-term preferences stored in SQLite across sessions and restarts.
+- Explicit remember/forget tools, safe exact deletion, and relevance-aware hint selection.
+- Preference hints for MainAgent and SearchAgent without exposing buyer identity to tools.
 - Offline tests for Domain, UseCases, Tools, RAG, HTTP, and sessions.
 
-The current suite contains 267 passing backend tests. The frontend also passes its
+The current suite contains 315 passing backend tests. The frontend also passes its
 TypeScript and production Vite build.
 
 ## Setup
@@ -201,9 +213,10 @@ Do not commit real API keys or other secrets.
 | 15. Frontend | Complete | React chat, streaming, session identity, prepared cards, event timeline |
 | 16. File Persistence and Recovery | Complete | JSON session snapshots, JSONL conversations, history recovery |
 | 17. Relational Database Persistence | Complete | Async SQLAlchemy, SQLite schema, database adapters, composition switch |
-| 18. Long-Term Buyer Memory | Next | Preferences, remember/forget tools, relevance selection, hint injection |
+| 18. Long-Term Buyer Memory | Complete | Preferences, remember/forget tools, relevance selection, hint injection |
 | 19. Redis and Async Work | Planned | Caches, idempotency, queue, cross-process events |
 | 20. Production Hardening | Planned | Resilience, tracing, auth, evaluation, deployment |
+| 21. Codebase Hardening | Planned | Composition cleanup, duplication reduction, typing, linting, and structural consolidation |
 
 The fixed high-level path is:
 
@@ -219,6 +232,7 @@ Order transaction flow
 → Long-term buyer memory
 → Redis caching, idempotency, and queues
 → Production hardening, evaluation, and deployment
+→ Codebase hardening and structural consolidation
 ```
 
 ## Documentation

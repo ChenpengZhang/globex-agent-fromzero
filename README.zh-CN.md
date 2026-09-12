@@ -98,6 +98,15 @@ InMemoryOrderRepository + Application DTO
 下单 / 查询 / 取消订单 UseCase
 ```
 
+买家长期记忆现在使用一条独立的持久化链路：
+
+```text
+记住 / 撤回工具 → PreferenceStore → SQLite buyer_preferences
+                                         ↓
+新请求 → PreferenceSelector → buyer 级 hint → MainAgent
+                                             └→ 派发时的 SearchAgent
+```
+
 ## 当前能力
 
 - 最小单 Agent 和真实 ChatModel 接入。
@@ -117,9 +126,12 @@ InMemoryOrderRepository + Application DTO
 - 类型化实时事件、token 流式输出和会话级 WebSocket 推送。
 - 响应式 React 购物对话页，以及 HTTP 提交与 WebSocket 流式接入。
 - 浏览器 buyer/session 身份持久化、断线重连和事件时间线。
+- 按 buyer 隔离并存入 SQLite 的长期偏好，可跨 session 和进程重启保留。
+- 显式的记住/撤回工具、精确删除规则和支持相关性排序的偏好筛选。
+- 向 MainAgent 与 SearchAgent 注入偏好，同时不向模型暴露 buyer 身份参数。
 - Domain、UseCase、Tool、RAG、HTTP 和会话的离线测试。
 
-当前共有 267 项后端测试通过，前端也已通过 TypeScript 与 Vite 生产构建。
+当前共有 315 项后端测试通过，前端也已通过 TypeScript 与 Vite 生产构建。
 
 ## 启动方式
 
@@ -200,9 +212,10 @@ uv run pytest
 | 15. 前端 | 已完成 | React 对话、流式输出、会话身份、预备卡片和事件时间线 |
 | 16. 文件持久化与恢复 | 已完成 | JSON Session 快照、JSONL 对话流水和历史恢复 |
 | 17. 关系型数据库持久化 | 已完成 | 异步 SQLAlchemy、SQLite Schema、数据库 Adapter 和组装切换 |
-| 18. 买家长期记忆 | 下一章 | 偏好、记住/忘记工具、相关性筛选和 hint 注入 |
+| 18. 买家长期记忆 | 已完成 | 偏好、记住/撤回工具、相关性筛选和 hint 注入 |
 | 19. Redis 与异步化 | 计划中 | 缓存、幂等、队列和跨进程事件 |
 | 20. 生产强化 | 计划中 | 韧性、Tracing、鉴权、评测和部署 |
+| 21. 代码强化 | 计划中 | Composition 清理、减少重复、类型约束、Lint 和结构收敛 |
 
 固定简化路线：
 
@@ -218,6 +231,7 @@ uv run pytest
 → 买家长期记忆
 → Redis 缓存、幂等与队列
 → 生产强化、评测与部署
+→ 代码强化与结构收敛
 ```
 
 ## 章节文档

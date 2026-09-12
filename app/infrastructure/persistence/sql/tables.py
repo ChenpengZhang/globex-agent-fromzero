@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    CheckConstraint,
     func,
 )
 from sqlalchemy.orm import (
@@ -176,4 +177,42 @@ class AgentSessionStateRow(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+class BuyerPreferenceRow(Base):
+    """Relational representation of a durable buyer preference."""
+
+    __tablename__ = "buyer_preferences"
+
+    id: Mapped[int] = mapped_column(
+        AutoPrimaryKey,
+        primary_key=True,
+        autoincrement=True,
+    )
+    buyer_id: Mapped[str] = mapped_column(
+        String(128),
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(
+        String(16),
+    )
+    statement: Mapped[str] = mapped_column(
+        String(255),
+    )
+    created_at: Mapped[str] = mapped_column(
+        String(40),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('like', 'dislike')",
+            name="ck_buyer_preference_kind",
+        ),
+        # prevent other values from being inserted
+        UniqueConstraint(
+            "buyer_id",
+            "kind",
+            "statement",
+            name="uq_buyer_preference_identity",
+        ),
     )
