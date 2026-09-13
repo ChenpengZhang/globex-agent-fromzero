@@ -107,6 +107,19 @@ new request → PreferenceSelector → buyer-scoped hint → MainAgent
                                                    └→ SearchAgent when dispatched
 ```
 
+Slow Agent work can now run outside the HTTP process:
+
+```text
+React → async HTTP → Redis Stream → Worker → Orchestrator
+   ↑                       │          │
+   └── status polling ─────┘          └→ Redis Pub/Sub → WebSocket
+```
+
+Redis accelerates embeddings and safe first-turn replies, coordinates
+idempotent submission, stores short-lived task status, delivers Stream tasks,
+and bridges realtime events across processes. SQLite remains the source of
+truth for durable conversations, preferences, and business data.
+
 ## Current Capabilities
 
 - Minimal single-Agent runtime and real ChatModel integration.
@@ -129,9 +142,13 @@ new request → PreferenceSelector → buyer-scoped hint → MainAgent
 - Buyer-scoped long-term preferences stored in SQLite across sessions and restarts.
 - Explicit remember/forget tools, safe exact deletion, and relevance-aware hint selection.
 - Preference hints for MainAgent and SearchAgent without exposing buyer identity to tools.
+- Redis-backed embedding and guarded semantic reply caches with explicit TTLs.
+- Idempotent asynchronous HTTP submission and buyer-scoped task polling.
+- Redis Stream workers with priority routing, ACK, retry, XAUTOCLAIM recovery, and dead letters.
+- Redis Pub/Sub event bridging between Worker and WebSocket API processes.
 - Offline tests for Domain, UseCases, Tools, RAG, HTTP, and sessions.
 
-The current suite contains 315 passing backend tests. The frontend also passes its
+The official `tests/` suite contains 450 passing backend tests. The frontend also passes its
 TypeScript and production Vite build.
 
 ## Setup
@@ -161,6 +178,15 @@ export RERANKER_BASE_URL=<rerank endpoint root>
 export RERANKER_MODEL=<reranker model name>
 ```
 
+Redis is optional for the synchronous CLI/API path. Enable it together with
+the queue when using the asynchronous frontend flow:
+
+```bash
+export REDIS_URL=redis://localhost:6379/0
+export QUEUE_ENABLED=1
+export WORKER_CONCURRENCY=1
+```
+
 Run the CLI:
 
 ```bash
@@ -171,6 +197,12 @@ Run the HTTP API:
 
 ```bash
 uv run uvicorn app.presentation.server:build_app --factory
+```
+
+When the queue is enabled, run the Worker in another terminal:
+
+```bash
+uv run python -m app.worker
 ```
 
 In another terminal, run the React frontend:
@@ -187,7 +219,7 @@ Then open `http://127.0.0.1:5173`. Vite proxies both HTTP and WebSocket
 Run the test suite:
 
 ```bash
-uv run pytest
+uv run pytest tests
 ```
 
 Do not commit real API keys or other secrets.
@@ -214,7 +246,7 @@ Do not commit real API keys or other secrets.
 | 16. File Persistence and Recovery | Complete | JSON session snapshots, JSONL conversations, history recovery |
 | 17. Relational Database Persistence | Complete | Async SQLAlchemy, SQLite schema, database adapters, composition switch |
 | 18. Long-Term Buyer Memory | Complete | Preferences, remember/forget tools, relevance selection, hint injection |
-| 19. Redis and Async Work | Planned | Caches, idempotency, queue, cross-process events |
+| 19. Redis and Async Work | Complete | Caches, idempotency, Stream worker, status polling, cross-process events |
 | 20. Production Hardening | Planned | Resilience, tracing, auth, evaluation, deployment |
 | 21. Codebase Hardening | Planned | Composition cleanup, duplication reduction, typing, linting, and structural consolidation |
 

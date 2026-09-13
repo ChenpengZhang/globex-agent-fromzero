@@ -29,6 +29,15 @@ class Settings:
     data_dir: Path
     database_url: str
 
+    redis_url: str
+    queue_enabled: bool
+    worker_concurrency: int
+    queue_max_deliveries: int
+    queue_priority_enabled: bool
+    queue_large_request_turns: int
+    semantic_cache_enabled: bool
+    semantic_cache_threshold: float
+
     preference_relevance_enabled: bool
     preference_top_k: int
     preference_subagent_inject: bool
@@ -63,6 +72,7 @@ def _read_bool(
     raise RuntimeError(
         f"{name} must be a boolean value"
     )
+
 
 def load_settings() -> Settings:
     load_dotenv()
@@ -133,6 +143,80 @@ def load_settings() -> Settings:
         "",
     ).strip()
 
+    redis_url = os.getenv(
+        "REDIS_URL",
+        "",
+    ).strip()
+
+    queue_enabled = _read_bool(
+        "QUEUE_ENABLED",
+        False,
+    )
+
+    worker_concurrency = int(
+        os.getenv(
+            "WORKER_CONCURRENCY",
+            "1",
+        )
+    )
+
+    if worker_concurrency < 1:
+        raise RuntimeError(
+            "WORKER_CONCURRENCY must be at least one"
+        )
+
+    queue_max_deliveries = int(
+        os.getenv(
+            "QUEUE_MAX_DELIVERIES",
+            "3",
+        )
+    )
+
+    if queue_max_deliveries < 1:
+        raise RuntimeError(
+            "QUEUE_MAX_DELIVERIES must be at least one"
+        )
+
+    queue_priority_enabled = _read_bool(
+        "QUEUE_PRIORITY_ENABLED",
+        True,
+    )
+
+    queue_large_request_turns = int(
+        os.getenv(
+            "QUEUE_LARGE_REQUEST_TURNS",
+            "30",
+        )
+    )
+
+    if queue_large_request_turns < 1:
+        raise RuntimeError(
+            "QUEUE_LARGE_REQUEST_TURNS must be at least one"
+        )
+
+    if queue_enabled and not redis_url:
+        raise RuntimeError(
+            "QUEUE_ENABLED requires REDIS_URL"
+        )
+
+    semantic_cache_enabled = _read_bool(
+        "SEMANTIC_CACHE_ENABLED",
+        True,
+    )
+
+    semantic_cache_threshold = float(
+        os.getenv(
+            "SEMANTIC_CACHE_THRESHOLD",
+            "0.95",
+        )
+    )
+
+    if not 0 < semantic_cache_threshold <= 1:
+        raise RuntimeError(
+            "SEMANTIC_CACHE_THRESHOLD must be "
+            "greater than zero and at most one"
+        )
+
     if not database_url:
         database_url = (
             f"sqlite+aiosqlite:///"
@@ -191,7 +275,19 @@ def load_settings() -> Settings:
         ).strip(),
         data_dir=data_dir,
         database_url=database_url,
-                preference_relevance_enabled=(
+        redis_url=redis_url,
+        queue_enabled=queue_enabled,
+        worker_concurrency=worker_concurrency,
+        queue_max_deliveries=queue_max_deliveries,
+        queue_priority_enabled=queue_priority_enabled,
+        queue_large_request_turns=queue_large_request_turns,
+        semantic_cache_enabled=(
+            semantic_cache_enabled
+        ),
+        semantic_cache_threshold=(
+            semantic_cache_threshold
+        ),
+        preference_relevance_enabled=(
             preference_relevance_enabled
         ),
         preference_top_k=preference_top_k,

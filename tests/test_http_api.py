@@ -18,7 +18,13 @@ from app.application.usecases.query_order import QueryOrderUseCase
 from app.application.usecases.get_conversation_history import (
     GetConversationHistoryUseCase,
 )
+from app.application.usecases.enqueue_intent import (
+    EnqueueIntentUseCase,
+    GetTaskStatusUseCase,
+)
 from app.composition import Container
+from app.infrastructure.cache.redis_cache import RedisCache
+from app.infrastructure.cache.semantic_cache import SemanticCache
 from app.infrastructure.persistence.in_memory_order_repository import (
     InMemoryOrderRepository,
 )
@@ -39,6 +45,11 @@ from tests.fakes import (
     InMemorySessionStore,
     RecordingProductVectorIndex,
     ScriptedChatModel,
+    build_composition_settings,
+)
+from tests.test_enqueue_intent import (
+    MemoryIdempotency,
+    MemoryTaskQueue,
 )
 
 
@@ -94,6 +105,11 @@ def build_test_container(
         InMemorySessionStore(),
     )
     event_bus = InMemoryTradeEventBus()
+    cache = RedisCache()
+    semantic_cache = SemanticCache(
+        cache=cache,
+        embedder=embedder,  # type: ignore[arg-type]
+    )
     conversation_store = InMemoryConversationStore()
     preference_store = InMemoryPreferenceStore()
     get_conversation_history = GetConversationHistoryUseCase(
@@ -108,11 +124,19 @@ def build_test_container(
 
     return (
         Container(
+            settings=build_composition_settings(),
             main_agent_factory=main_agent_factory,
             search_agent_factory=search_agent_factory,
             trade_agent_factory=trade_agent_factory,
             knowledge_base=knowledge_base,  # type: ignore[arg-type]
             event_bus=event_bus,
+            event_backplane=None,
+            cache=cache,
+            semantic_cache=semantic_cache,
+            task_queue=None,
+            idempotency=None,
+            enqueue_intent=None,
+            get_task_status=None,
             conversation_store=conversation_store,
             preference_store=preference_store,
             get_conversation_history=get_conversation_history,
@@ -134,6 +158,27 @@ def build_test_container(
     )
 
 
+def enable_async_submission(
+    container: Container,
+    queue: MemoryTaskQueue | None = None,
+) -> MemoryTaskQueue:
+    configured_queue = queue or MemoryTaskQueue()
+    idempotency = MemoryIdempotency()
+    container.task_queue = configured_queue  # type: ignore[assignment]
+    container.idempotency = idempotency  # type: ignore[assignment]
+    container.enqueue_intent = EnqueueIntentUseCase(
+        configured_queue,  # type: ignore[arg-type]
+        idempotency,
+        container.conversation_store,
+        container.event_bus,
+        priority_enabled=False,
+    )
+    container.get_task_status = GetTaskStatusUseCase(
+        configured_queue  # type: ignore[arg-type]
+    )
+    return configured_queue
+
+
 def test_health_endpoint() -> None:
     container, _ = build_test_container()
 
@@ -141,7 +186,49 @@ def test_health_endpoint() -> None:
         response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {
+        "status": "ok",
+        "redis": "disabled",
+        "semantic_cache": False,
+        "queue": "disabled",
+        "queue_depth": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    ("reachable", "expected_state"),
+    [
+        (True, "ok"),
+        (False, "error"),
+    ],
+)
+def test_health_reports_configured_redis_state(
+    reachable: bool,
+    expected_state: str,
+) -> None:
+    class HealthCache:
+        enabled = True
+
+        async def ping(self) -> bool:
+            return reachable
+
+        async def close(self) -> None:
+            return None
+
+    container, _ = build_test_container()
+    container.cache = HealthCache()  # type: ignore[assignment]
+
+    with TestClient(build_app(container)) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "redis": expected_state,
+        "semantic_cache": False,
+        "queue": "disabled",
+        "queue_depth": 0,
+    }
 
 
 def test_app_lifespan_initializes_and_closes_vector_resources() -> None:
@@ -168,6 +255,27 @@ def test_app_lifespan_initializes_and_closes_vector_resources() -> None:
 
     assert vector_store.exit_count == 1
     assert product_index.close_count == 1
+
+
+def test_app_lifespan_initializes_task_queue() -> None:
+    class RecordingQueue:
+        def __init__(self) -> None:
+            self.ensure_ready_count = 0
+
+        async def ensure_ready(self) -> None:
+            self.ensure_ready_count += 1
+
+        async def depth(self) -> int:
+            return 0
+
+    container, _ = build_test_container()
+    queue = RecordingQueue()
+    container.task_queue = queue  # type: ignore[assignment]
+
+    with TestClient(build_app(container)) as client:
+        assert client.get("/health").status_code == 200
+
+    assert queue.ensure_ready_count == 1
 
 
 def test_submit_intent_generates_session_and_uses_defaults() -> None:
@@ -356,6 +464,154 @@ def test_history_endpoint_validates_query_parameters(
     assert response.status_code == 422
 
 
+def test_async_submit_is_unavailable_when_queue_is_disabled() -> None:
+    container, _ = build_test_container()
+
+    with TestClient(build_app(container)) as client:
+        response = client.post(
+            "/commerce/intents/async",
+            json={
+                "buyer_id": "buyer-001",
+                "raw_query": "推荐背包",
+            },
+        )
+
+    assert response.status_code == 503
+
+
+def test_async_submit_and_status_query_complete_the_http_contract() -> None:
+    container, _ = build_test_container()
+    queue = enable_async_submission(container)
+
+    with TestClient(build_app(container)) as client:
+        submitted = client.post(
+            "/commerce/intents/async",
+            json={
+                "shopping_session_id": "session-async",
+                "buyer_id": "buyer-001",
+                "raw_query": "推荐背包",
+                "idempotency_key": "browser-request-1",
+            },
+        )
+        task_id = submitted.json()["task_id"]
+        queued = client.get(
+            f"/commerce/tasks/{task_id}",
+            params={"buyer_id": "buyer-001"},
+        )
+
+        queue.statuses[task_id] = queue.statuses[task_id].__class__(
+            task_id=task_id,
+            shopping_session_id="session-async",
+            buyer_id="buyer-001",
+            state="done",
+            final_text="最终回复",
+        )
+        done = client.get(
+            f"/commerce/tasks/{task_id}",
+            params={"buyer_id": "buyer-001"},
+        )
+
+    assert submitted.status_code == 202
+    assert submitted.json() == {
+        "shopping_session_id": "session-async",
+        "task_id": task_id,
+        "state": "queued",
+    }
+    assert queued.json()["state"] == "queued"
+    assert done.json()["state"] == "done"
+    assert done.json()["final_text"] == "最终回复"
+
+
+def test_async_submit_reuses_task_for_the_same_idempotency_key() -> None:
+    container, _ = build_test_container()
+    queue = enable_async_submission(container)
+    body = {
+        "shopping_session_id": "session-async",
+        "buyer_id": "buyer-001",
+        "raw_query": "推荐背包",
+        "idempotency_key": "browser-request-1",
+    }
+
+    with TestClient(build_app(container)) as client:
+        first = client.post("/commerce/intents/async", json=body)
+        second = client.post("/commerce/intents/async", json=body)
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert second.json()["task_id"] == first.json()["task_id"]
+    assert len(queue.tasks) == 1
+
+
+def test_async_retry_reuses_the_generated_session() -> None:
+    container, _ = build_test_container()
+    enable_async_submission(container)
+    body = {
+        "buyer_id": "buyer-001",
+        "raw_query": "推荐背包",
+        "idempotency_key": "browser-request-without-session",
+    }
+
+    with TestClient(build_app(container)) as client:
+        first = client.post("/commerce/intents/async", json=body)
+        second = client.post("/commerce/intents/async", json=body)
+
+    assert second.json()["task_id"] == first.json()["task_id"]
+    assert second.json()["shopping_session_id"] == (
+        first.json()["shopping_session_id"]
+    )
+    assert len(
+        container.conversation_store.sessions  # type: ignore[attr-defined]
+    ) == 1
+
+
+def test_task_status_hides_another_buyers_task() -> None:
+    container, _ = build_test_container()
+    enable_async_submission(container)
+
+    with TestClient(build_app(container)) as client:
+        submitted = client.post(
+            "/commerce/intents/async",
+            json={
+                "buyer_id": "buyer-owner",
+                "raw_query": "推荐背包",
+            },
+        )
+        task_id = submitted.json()["task_id"]
+        forbidden = client.get(
+            f"/commerce/tasks/{task_id}",
+            params={"buyer_id": "buyer-intruder"},
+        )
+        missing = client.get(
+            "/commerce/tasks/missing",
+            params={"buyer_id": "buyer-owner"},
+        )
+
+    assert forbidden.status_code == 403
+    assert missing.status_code == 404
+
+
+def test_async_submit_maps_queue_failure_to_service_unavailable() -> None:
+    container, _ = build_test_container()
+    enable_async_submission(
+        container,
+        MemoryTaskQueue(ConnectionError("redis unavailable")),
+    )
+
+    with TestClient(build_app(container)) as client:
+        response = client.post(
+            "/commerce/intents/async",
+            json={
+                "buyer_id": "buyer-001",
+                "raw_query": "推荐背包",
+            },
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Task queue is temporarily unavailable"
+    )
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -430,4 +686,3 @@ def test_websocket_streams_session_events_and_unsubscribes() -> None:
     assert final_event["payload"] == {
         "text": "实时测试回复",
     }
-    InMemorySessionStore,

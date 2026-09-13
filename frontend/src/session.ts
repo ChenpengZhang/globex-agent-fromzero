@@ -40,3 +40,7 @@ export function replaceSessionId(): string {
 export function createTurnId(): string {
   return createId("turn");
 }
+
+export function createRequestId(): string {
+  return createId("request");
+}

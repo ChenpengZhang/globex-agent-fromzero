@@ -107,6 +107,18 @@ InMemoryOrderRepository + Application DTO
                                              └→ 派发时的 SearchAgent
 ```
 
+耗时的 Agent 工作现在可以离开 HTTP 进程执行：
+
+```text
+React → 异步 HTTP → Redis Stream → Worker → Orchestrator
+   ↑                      │          │
+   └── 状态轮询 ──────────┘          └→ Redis Pub/Sub → WebSocket
+```
+
+Redis 用于加速 embedding 与安全的首轮回复、协调幂等提交、保存短期任务状态、
+投递 Stream 任务，以及在不同进程间转发实时事件。持久对话、偏好和业务数据仍以
+SQLite 为权威来源。
+
 ## 当前能力
 
 - 最小单 Agent 和真实 ChatModel 接入。
@@ -129,9 +141,13 @@ InMemoryOrderRepository + Application DTO
 - 按 buyer 隔离并存入 SQLite 的长期偏好，可跨 session 和进程重启保留。
 - 显式的记住/撤回工具、精确删除规则和支持相关性排序的偏好筛选。
 - 向 MainAgent 与 SearchAgent 注入偏好，同时不向模型暴露 buyer 身份参数。
+- 带明确 TTL 的 Redis Embedding Cache 与受保护的 Semantic Cache。
+- 幂等的异步 HTTP 提交，以及按 buyer 隔离的任务状态轮询。
+- 支持优先级、ACK、重试、XAUTOCLAIM 恢复与死信的 Redis Stream Worker。
+- 在 Worker 与 WebSocket API 进程之间转发事件的 Redis Pub/Sub backplane。
 - Domain、UseCase、Tool、RAG、HTTP 和会话的离线测试。
 
-当前共有 315 项后端测试通过，前端也已通过 TypeScript 与 Vite 生产构建。
+正式 `tests/` 目录共有 450 项后端测试通过，前端也已通过 TypeScript 与 Vite 生产构建。
 
 ## 启动方式
 
@@ -160,6 +176,14 @@ export RERANKER_BASE_URL=<rerank endpoint root>
 export RERANKER_MODEL=<reranker model name>
 ```
 
+同步 CLI/API 不强制使用 Redis。运行异步前端链路时，需要同时配置 Redis 和队列：
+
+```bash
+export REDIS_URL=redis://localhost:6379/0
+export QUEUE_ENABLED=1
+export WORKER_CONCURRENCY=1
+```
+
 启动 CLI：
 
 ```bash
@@ -170,6 +194,12 @@ uv run python -m app.presentation.cli
 
 ```bash
 uv run uvicorn app.presentation.server:build_app --factory
+```
+
+开启队列后，在另一个终端启动 Worker：
+
+```bash
+uv run python -m app.worker
 ```
 
 在另一个终端中启动 React 前端：
@@ -186,7 +216,7 @@ WebSocket 流量代理到 8000 端口的后端。
 运行测试：
 
 ```bash
-uv run pytest
+uv run pytest tests
 ```
 
 不要提交真实 API Key 或其他敏感信息。
@@ -213,7 +243,7 @@ uv run pytest
 | 16. 文件持久化与恢复 | 已完成 | JSON Session 快照、JSONL 对话流水和历史恢复 |
 | 17. 关系型数据库持久化 | 已完成 | 异步 SQLAlchemy、SQLite Schema、数据库 Adapter 和组装切换 |
 | 18. 买家长期记忆 | 已完成 | 偏好、记住/撤回工具、相关性筛选和 hint 注入 |
-| 19. Redis 与异步化 | 计划中 | 缓存、幂等、队列和跨进程事件 |
+| 19. Redis 与异步化 | 已完成 | 缓存、幂等、Stream Worker、状态轮询和跨进程事件 |
 | 20. 生产强化 | 计划中 | 韧性、Tracing、鉴权、评测和部署 |
 | 21. 代码强化 | 计划中 | Composition 清理、减少重复、类型约束、Lint 和结构收敛 |
 

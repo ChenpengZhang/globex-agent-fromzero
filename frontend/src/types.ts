@@ -4,11 +4,34 @@ export interface SubmitIntentRequest {
   locale: string;
   currency: string;
   raw_query: string;
+  idempotency_key?: string;
 }
 
 export interface SubmitIntentResponse {
   shopping_session_id: string;
   final_text: string;
+}
+
+export type TaskState =
+  | "queued"
+  | "running"
+  | "retrying"
+  | "done"
+  | "failed";
+
+export interface AsyncSubmitIntentResponse {
+  shopping_session_id: string;
+  task_id: string;
+  state: TaskState;
+}
+
+export interface TaskStatusResponse {
+  task_id: string;
+  shopping_session_id: string;
+  state: TaskState;
+  final_text: string;
+  error: string;
+  queue_position: number;
 }
 
 export interface ConversationTurnRecord {
@@ -77,6 +100,21 @@ interface TradeEventBase {
   occurred_at: string;
 }
 
+export interface TaskQueuedEvent extends TradeEventBase {
+  type: "task.queued";
+  payload: { task_id: string };
+}
+
+export interface TaskStartedEvent extends TradeEventBase {
+  type: "task.started";
+  payload: { task_id: string };
+}
+
+export interface CacheHitEvent extends TradeEventBase {
+  type: "cache.hit";
+  payload: Record<string, unknown>;
+}
+
 export interface TokenDeltaEvent extends TradeEventBase {
   type: "token.delta";
   payload: {
@@ -122,6 +160,9 @@ export interface AgentDispatchEvent extends TradeEventBase {
 }
 
 export type TradeEvent =
+  | TaskQueuedEvent
+  | TaskStartedEvent
+  | CacheHitEvent
   | TokenDeltaEvent
   | FinalResultEvent
   | ErrorEvent
@@ -130,9 +171,12 @@ export type TradeEvent =
   | AgentDispatchEvent;
 
 const EVENT_TYPES = new Set<TradeEvent["type"]>([
+  "task.queued",
+  "task.started",
   "agent.dispatch",
   "tool.invoke",
   "tool.result",
+  "cache.hit",
   "token.delta",
   "final.result",
   "error",

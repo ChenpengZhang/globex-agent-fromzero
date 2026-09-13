@@ -8,7 +8,8 @@ import {
 
 import {
   loadConversationHistory,
-  submitIntent,
+  submitIntentAsync,
+  waitForTask,
 } from "./api";
 import EventTimeline from "./components/EventTimeline";
 import OrderCard from "./components/OrderCard";
@@ -16,6 +17,7 @@ import ProductCards from "./components/ProductCards";
 import { connectEventStream } from "./eventStream";
 import {
   createTurnId,
+  createRequestId,
   loadBuyerId,
   loadSessionId,
   replaceSessionId,
@@ -84,15 +86,18 @@ export default function App() {
 
         setEvents((current) => [...current.slice(-99), event]);
 
+        if (event.type === "task.started") {
+          setStreamingText("");
+          setNotice(null);
+        }
+
         if (event.type === "final.result") {
           setStreamingText("");
           setTurns((current) => appendFinalTurn(current, event.payload.text));
-          setBusy(false);
         }
 
         if (event.type === "error") {
           setNotice(event.payload.message);
-          setBusy(false);
         }
       },
     });
@@ -165,13 +170,19 @@ export default function App() {
     ]);
 
     try {
-      const result = await submitIntent({
+      const submitted = await submitIntentAsync({
         shopping_session_id: sessionId,
         buyer_id: buyerId,
         locale: "zh-CN",
         currency: "CNY",
         raw_query: query,
+        idempotency_key: createRequestId(),
       });
+      const result = await waitForTask(submitted.task_id, buyerId);
+
+      if (result.state === "failed") {
+        throw new Error(result.error || "Agent 任务执行失败");
+      }
 
       setStreamingText("");
       setTurns((current) => appendFinalTurn(current, result.final_text));

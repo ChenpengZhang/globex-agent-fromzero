@@ -1,0 +1,7 @@
+.venv/
+data/raw/
+data/processed/
+results/*.json
+results/*.csv
+results/*.md
+!results/.gitkeep

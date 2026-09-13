@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import time
 
@@ -32,6 +33,9 @@ from app.application.agents.session_registry import (
 from app.infrastructure.context import (
     ShoppingContext,
     ShoppingContextSnapshot,
+)
+from app.infrastructure.cache.semantic_cache import (
+    SemanticCache,
 )
 
 
@@ -103,6 +107,7 @@ class MainAgentOrchestrator:
         sessions: SessionRegistry,
         event_bus: EventBus,
         conversation_store: ConversationStore | None = None,
+        semantic_cache: SemanticCache | None = None,
         preference_store: PreferenceStore | None = None,
         preference_selector: PreferenceSelector | None = None,
         preference_top_k: int = 5,
@@ -110,6 +115,7 @@ class MainAgentOrchestrator:
         self._sessions = sessions
         self._event_bus = event_bus
         self._conversation_store = conversation_store
+        self._semantic_cache = semantic_cache
         self._preference_store = preference_store
         self._preference_selector = (
             preference_selector
@@ -172,18 +178,39 @@ class MainAgentOrchestrator:
             # in order to avoid B to collect A's trace.
 
             try:
-                agent_inputs = await self._build_agent_inputs(
-                    intent=intent,
-                    user_message=user_message,
-                )
-
-                final_text = await self._consume_reply(
+                has_history = await self._has_history(
                     agent=session.agent,
-                    messages=agent_inputs,
                     shopping_session_id=(
                         intent.shopping_session_id
                     ),
                 )
+
+                cached_reply = await self._lookup_cache(
+                    intent=intent,
+                    has_history=has_history,
+                )
+
+                if cached_reply is not None:
+                    final_text = cached_reply
+                else:
+                    agent_inputs = await self._build_agent_inputs(
+                        intent=intent,
+                        user_message=user_message,
+                    )
+
+                    final_text = await self._consume_reply(
+                        agent=session.agent,
+                        messages=agent_inputs,
+                        shopping_session_id=(
+                            intent.shopping_session_id
+                        ),
+                    )
+
+                    await self._remember_cache(
+                        intent=intent,
+                        reply=final_text,
+                        has_history=has_history,
+                    )
 
                 self._event_bus.publish(
                     intent.shopping_session_id,
@@ -228,6 +255,158 @@ class MainAgentOrchestrator:
             ),
             final_text=final_text or "",
         )
+
+    async def _has_history(
+        self,
+        agent: Agent,
+        shopping_session_id: str,
+    ) -> bool:
+        """
+        Decide whether semantic cache reuse is safe for this session.
+
+        Persistent conversation history is authoritative because a
+        previous cache hit does not add messages to AgentState.
+        """
+
+        if self._conversation_store is None:
+            return bool(agent.state.context)
+
+        try:
+            turns = await self._conversation_store.list_turns(
+                shopping_session_id,
+                limit=1,
+            )  # request the conversation storage, e.g. sql.
+        except Exception as error:
+            logger.warning(
+                "Conversation history lookup failed; "
+                "semantic cache is disabled for this turn: %s",
+                error,
+            )
+            return True
+
+        return bool(
+            turns
+            or agent.state.context
+        )
+
+    async def _preference_scope(
+        self,
+        buyer_id: str,
+    ) -> str | None:
+        """
+        Fingerprint the buyer's complete durable preference state.
+
+        None means the preference state could not be read safely.
+        An empty string means the buyer currently has no preferences.
+        """
+
+        if self._preference_store is None:
+            return ""
+
+        try:
+            preferences = (
+                await self._preference_store.list_by_buyer(
+                    buyer_id,
+                )
+            )
+        except Exception as error:
+            logger.warning(
+                "Preference fingerprint lookup failed; "
+                "semantic cache is disabled for this turn: %s",
+                error,
+            )
+            return None
+
+        if not preferences:
+            return ""
+
+        rendered = render_preference_lines(
+            preferences
+        )
+
+        return hashlib.sha256(
+            rendered.encode("utf-8")
+        ).hexdigest()[:16]
+
+    async def _lookup_cache(
+        self,
+        intent: SubmitIntentInput,
+        has_history: bool,
+    ) -> str | None:
+        if self._semantic_cache is None:
+            return None
+
+        scope = await self._preference_scope(
+            intent.buyer_id
+        )
+
+        if scope is None:
+            return None
+
+        try:
+            hit = await self._semantic_cache.lookup(
+                buyer_id=intent.buyer_id,
+                query=intent.raw_query,
+                has_history=has_history,
+                scope=scope,
+            )
+        except Exception as error:
+            logger.warning(
+                "Semantic cache lookup failed; "
+                "continuing with the Agent: %s",
+                error,
+            )
+            return None
+
+        if hit is None:
+            return None
+
+        logger.info(
+            "Semantic cache hit with similarity %.4f",
+            hit.similarity,
+        )
+
+        self._event_bus.publish(
+            intent.shopping_session_id,
+            TradeEventType.CACHE_HIT,
+            {
+                "similarity": hit.similarity,
+                "matched_query": hit.matched_query,
+            },
+        )
+
+        return hit.reply
+
+    async def _remember_cache(
+        self,
+        intent: SubmitIntentInput,
+        reply: str,
+        has_history: bool,
+    ) -> None:
+        if self._semantic_cache is None:
+            return
+
+        scope = await self._preference_scope(
+            intent.buyer_id
+        )
+
+        if scope is None:
+            return
+
+        try:
+            await self._semantic_cache.remember(
+                buyer_id=intent.buyer_id,
+                query=intent.raw_query,
+                reply=reply,
+                has_history=has_history,
+                scope=scope,
+            )
+        except Exception as error:
+            logger.warning(
+                "Semantic cache update failed; "
+                "continuing without caching: %s",
+                error,
+            )
 
     async def _record_conversation(
         self,

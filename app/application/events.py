@@ -3,13 +3,17 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
+from collections.abc import Callable
 from typing import Any, Protocol
 
 
 class TradeEventType(StrEnum):
+    TASK_QUEUED = "task.queued"
+    TASK_STARTED = "task.started"
     AGENT_DISPATCH = "agent.dispatch"
     TOOL_INVOKE = "tool.invoke"
     TOOL_RESULT = "tool.result"
+    CACHE_HIT = "cache.hit"
     TOKEN_DELTA = "token.delta"
     FINAL_RESULT = "final.result"
     ERROR = "error"
@@ -31,6 +35,25 @@ class TradeEvent:
             "payload": self.payload,
             "occurred_at": self.occurred_at.isoformat(),
         }
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> "TradeEvent":
+        occurred_at = datetime.fromisoformat(str(raw["occurred_at"]))
+
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=timezone.utc)
+
+        payload = raw["payload"]
+
+        if not isinstance(payload, dict):
+            raise ValueError("TradeEvent.payload must be an object")
+
+        return cls(
+            shopping_session_id=str(raw["shopping_session_id"]),
+            type=TradeEventType(raw["type"]),
+            payload=payload,
+            occurred_at=occurred_at,
+        )
 
 
 class EventPublisher(Protocol):
@@ -55,5 +78,22 @@ class EventBus(EventPublisher, Protocol):
         self,
         shopping_session_id: str,
         queue: asyncio.Queue[TradeEvent],
+    ) -> None:
+        ...
+
+
+RemoteEventHandler = Callable[[TradeEvent], None]
+
+
+class EventBackplane(Protocol):
+    """Move events between independently running processes."""
+
+    async def publish(self, event: TradeEvent) -> None:
+        ...
+
+    async def listen(
+        self,
+        handler: RemoteEventHandler,
+        should_stop: Callable[[], bool],
     ) -> None:
         ...

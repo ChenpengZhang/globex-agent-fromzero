@@ -2,15 +2,30 @@ import type { TradeEvent } from "../types";
 
 
 const LABELS: Record<TradeEvent["type"], string> = {
+  "task.queued": "任务已排队",
+  "task.started": "任务开始",
   "agent.dispatch": "子 Agent 调度",
   "tool.invoke": "工具开始",
   "tool.result": "工具完成",
+  "cache.hit": "缓存命中",
   "token.delta": "文本片段",
   "final.result": "回复完成",
   "error": "发生错误",
 };
 
 function eventSummary(event: TradeEvent): string {
+  if (event.type === "task.queued") {
+    return `任务 ${event.payload.task_id} 已进入队列`;
+  }
+
+  if (event.type === "task.started") {
+    return `Worker 开始执行 ${event.payload.task_id}`;
+  }
+
+  if (event.type === "cache.hit") {
+    return "复用了语义相近请求的安全回复";
+  }
+
   if (event.type === "final.result") {
     return event.payload.text.slice(0, 80);
   }

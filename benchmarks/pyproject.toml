@@ -1,0 +1,16 @@
+[project]
+name = "globex-product-recall-benchmark"
+version = "0.1.0"
+description = "Offline product-recall benchmark isolated from the application code"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "numpy>=2,<3",
+    "pyarrow>=21,<22",
+    "scikit-learn>=1.7,<2",
+]
+
+[dependency-groups]
+dev = ["pytest>=9,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

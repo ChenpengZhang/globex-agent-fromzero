@@ -78,6 +78,8 @@ class InMemoryPreferenceStore:
 def build_composition_settings(
     *,
     reranker_base_url: str = "",
+    redis_url: str = "",
+    queue_enabled: bool = False,
 ) -> SimpleNamespace:
     """Small settings double for fully monkeypatched composition tests."""
     return SimpleNamespace(
@@ -85,6 +87,16 @@ def build_composition_settings(
         preference_relevance_enabled=False,
         preference_top_k=5,
         preference_subagent_inject=True,
+        redis_url=redis_url,
+        queue_enabled=queue_enabled,
+        worker_concurrency=1,
+        queue_max_deliveries=3,
+        queue_priority_enabled=True,
+        queue_large_request_turns=30,
+        embedding_model="test-embedding-model",
+        llm_model="test-chat-model",
+        semantic_cache_enabled=True,
+        semantic_cache_threshold=0.95,
         data_dir=Path(
             "/private/tmp/globex-agent-fromzero-tests",
         ),
@@ -127,6 +139,16 @@ class InMemoryConversationStore:
         locale: str,
         currency: str,
     ) -> None:
+        existing = self.sessions.get(session_id)
+
+        if (
+            existing is not None
+            and existing["buyer_id"] != buyer_id
+        ):
+            raise ValueError(
+                "The conversation session belongs to another buyer"
+            )
+
         self.sessions[session_id] = {
             "session_id": session_id,
             "buyer_id": buyer_id,
