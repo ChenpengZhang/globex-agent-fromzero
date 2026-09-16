@@ -200,6 +200,11 @@ class Container:
             product_repository=self.product_repository,
             embedder=self.embedder,
             vector_index=self.vector_index,
+            embedder_namespace=(
+                f"{self.settings.embedding_base_url.rstrip('/')}|"
+                f"{self.settings.embedding_model}|"
+                "product-vector-v1"
+            ),
         )
 
         await bootstrap_category_knowledge(

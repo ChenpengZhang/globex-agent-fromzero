@@ -39,6 +39,7 @@ class ProductVectorIndex(ABC):
         self,
         products: list[Product],
         embeddings: list[list[float]],
+        fingerprints: list[str],
     ) -> None:
         """Insert or replace product vectors."""
 
@@ -49,6 +50,16 @@ class ProductVectorIndex(ABC):
         top_n: int,
     ) -> list[VectorHit]:
         """Return product IDs ordered by vector relevance."""
+
+    @abstractmethod
+    async def get_fingerprints_dict(
+        self,
+        product_ids: list[str],
+    ) -> dict[str, str]:
+        """
+        Return a dict of all stored fingerprints of 
+        requested product ids (if exist)
+        """
 
 
 class Reranker(ABC):

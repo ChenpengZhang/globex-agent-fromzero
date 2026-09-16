@@ -57,8 +57,12 @@ class RecordingVectorIndex:
         self,
         products,
         embeddings: list[list[float]],
+        fingerprints: list[str],
     ) -> None:
         return None
+
+    async def get_fingerprints_dict(self, product_ids: list[str]) -> dict[str, str]:
+        return {}
 
     async def search(
         self,
@@ -143,7 +147,7 @@ async def test_vector_recall_preserves_hit_order_and_scores() -> None:
     assert index.search_calls == [
         {
             "embedding": [0.6, 0.4],
-            "top_n": 8,
+            "top_n": 50,
         }
     ]
     assert [

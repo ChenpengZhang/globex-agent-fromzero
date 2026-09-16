@@ -14,7 +14,7 @@ from app.domain.catalog.product_search_spec import ProductSearchSpec
 
 logger = logging.getLogger(__name__)
 
-_RECALL_TOP_N = 8
+_RECALL_TOP_N = 50
 
 
 def tokenize(text: str) -> set[str]:

@@ -1,0 +1,50 @@
+[
+  {
+    "case_id": "travel_light",
+    "user_request": "我准备坐廉航去旅行，请同时帮我找轻便旅行套装、20 寸登机箱和可折叠双肩包。",
+    "search_branches": [
+      "轻便旅行收纳套装",
+      "20 inch carry on luggage lightweight",
+      "foldable travel backpack"
+    ]
+  },
+  {
+    "case_id": "business_trip_electronics",
+    "user_request": "下周出国出差，分别找一个 100W 氮化镓充电器、万能转换插头、20000mAh 充电宝和降噪耳机。",
+    "search_branches": [
+      "100W GaN charger",
+      "universal international travel adapter",
+      "20000mAh power bank",
+      "active noise cancelling headphones"
+    ]
+  },
+  {
+    "case_id": "camping_kit",
+    "user_request": "第一次两天一夜露营，请同时找睡垫、三季睡袋、营地灯和一对徒步杖。",
+    "search_branches": [
+      "camping sleeping pad",
+      "three season sleeping bag",
+      "rechargeable camping lantern",
+      "pair of trekking poles"
+    ]
+  },
+  {
+    "case_id": "housewarming_gifts",
+    "user_request": "朋友搬新家，帮我分别找有设计感的马克杯、茶具和香薰机作为候选礼物。",
+    "search_branches": [
+      "designer ceramic coffee mug",
+      "modern tea set gift",
+      "home essential oil diffuser"
+    ]
+  },
+  {
+    "case_id": "summer_travel_essentials",
+    "user_request": "夏天旅行需要补齐装备，请同时找晴雨伞、速干毛巾、保温水杯和行李收纳袋。",
+    "search_branches": [
+      "compact windproof travel umbrella",
+      "quick dry travel towel",
+      "insulated water bottle",
+      "packing cubes travel organizer"
+    ]
+  }
+]

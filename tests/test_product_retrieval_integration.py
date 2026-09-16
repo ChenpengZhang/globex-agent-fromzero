@@ -1,6 +1,8 @@
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
+from qdrant_client.models import PointStruct
 
 from app.application.usecases.catalog_search import (
     CatalogSearchUseCase,
@@ -17,6 +19,7 @@ from app.infrastructure.vector.index_bootstrap import (
 )
 from app.infrastructure.vector.qdrant_product_index import (
     QdrantProductIndex,
+    _point_id,
 )
 
 
@@ -26,6 +29,56 @@ _TERMS = (
     "三件套",
     "轻便",
 )
+
+
+@pytest.mark.asyncio
+async def test_incremental_bootstrap_backfills_legacy_and_reuses_persisted_index(tmp_path):
+    products = build_seed_products()[:2]
+    repository = InMemoryProductRepository(products)
+    settings = SimpleNamespace(
+        qdrant_url="", data_dir=tmp_path,
+        product_vector_collection="incremental_products",
+    )
+    index = QdrantProductIndex(settings)
+    embedder = AxisEmbeddingClient()
+    try:
+        await index.ensure_ready(vector_dim=len(_TERMS))
+        await index._client.upsert(
+            collection_name=index._collection,
+            points=[PointStruct(
+                id=_point_id(products[0].product_id),
+                vector=[1.0, 0.0, 0.0, 0.0],
+                payload={"product_id": products[0].product_id},
+            )],
+            wait=True,
+        )
+        assert await bootstrap_product_index(repository, embedder, index, "axis-v1")
+        assert embedder.batch_calls == [[p.searchable_text() for p in products]]
+        fingerprints = await index.get_fingerprints_dict([p.product_id for p in products])
+        assert len(fingerprints) == 2
+    finally:
+        await index.close()
+
+    # Reopen the persisted collection to simulate a fresh application process.
+    index = QdrantProductIndex(settings)
+    embedder = AxisEmbeddingClient()
+    index.upsert_products = AsyncMock(wraps=index.upsert_products)
+    try:
+        assert await bootstrap_product_index(repository, embedder, index, "axis-v1")
+        assert embedder.batch_calls == []
+        index.upsert_products.assert_not_called()
+
+        products[0].description += " 折叠"
+        assert await bootstrap_product_index(repository, embedder, index, "axis-v1")
+        assert embedder.batch_calls == [[products[0].searchable_text()]]
+        assert index.upsert_products.call_args.kwargs["products"] == [products[0]]
+        updated = await index.get_fingerprints_dict([p.product_id for p in products])
+        assert updated[products[0].product_id] != fingerprints[products[0].product_id]
+        assert updated[products[1].product_id] == fingerprints[products[1].product_id]
+        count = await index._client.count(collection_name=index._collection, exact=True)
+        assert count.count == 2
+    finally:
+        await index.close()
 
 
 class AxisEmbeddingClient:
@@ -97,6 +150,7 @@ async def test_product_retrieval_pipeline_from_indexing_to_cards(
             product_repository=repository,
             embedder=embedder,  # type: ignore[arg-type]
             vector_index=index,
+            embedder_namespace="test-axis-v1",
         )
         usecase = CatalogSearchUseCase(
             product_repository=repository,

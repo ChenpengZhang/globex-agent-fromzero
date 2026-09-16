@@ -94,6 +94,7 @@ def build_composition_settings(
         queue_priority_enabled=True,
         queue_large_request_turns=30,
         embedding_model="test-embedding-model",
+        embedding_base_url="https://embedding.example/v1",
         llm_model="test-chat-model",
         semantic_cache_enabled=True,
         semantic_cache_threshold=0.95,
@@ -269,6 +270,10 @@ class RecordingProductVectorIndex:
         self.upsert_calls: list[dict] = []
         self.search_calls: list[dict] = []
         self.close_count = 0
+        self.fingerprints: dict[str, str] = {}
+
+    async def get_fingerprints_dict(self, product_ids: list[str]) -> dict[str, str]:
+        return {key: value for key, value in self.fingerprints.items() if key in product_ids}
 
     async def ensure_ready(self, vector_dim: int) -> None:
         self.ready_dimensions.append(vector_dim)
@@ -277,12 +282,17 @@ class RecordingProductVectorIndex:
         self,
         products,
         embeddings: list[list[float]],
+        fingerprints: list[str],
     ) -> None:
         self.upsert_calls.append(
             {
                 "products": list(products),
                 "embeddings": list(embeddings),
             }
+        )
+        self.fingerprints.update(
+            (product.product_id, fingerprint)
+            for product, fingerprint in zip(products, fingerprints)
         )
 
     async def search(

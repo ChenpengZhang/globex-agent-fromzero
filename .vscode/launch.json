@@ -2,6 +2,34 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "API: FastAPI async",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "app.presentation.server:build_app",
+        "--factory",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "Worker: Redis Stream",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.worker",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
       "name": "CLI: Interactive shopping",
       "type": "debugpy",
       "request": "launch",
@@ -52,6 +80,16 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full async backend",
+      "configurations": [
+        "API: FastAPI async",
+        "Worker: Redis Stream"
+      ],
+      "stopAll": true
     }
   ]
 }

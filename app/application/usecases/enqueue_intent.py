@@ -46,10 +46,13 @@ class EnqueueIntentUseCase:
     async def execute(
         self,
         intent: SubmitIntentInput,
-        idempotency_key: str | None = None,
+        idempotency_key: str | None = None,  # frontend request key
     ) -> EnqueueIntentResult:
-        request_key = self._request_key(intent, idempotency_key)
-        proposed_task_id = f"task-{uuid.uuid4().hex[:12]}"
+        request_key = self._request_key(intent, idempotency_key)  # buyerid + frontend key
+        proposed_task_id = f"task-{uuid.uuid4().hex[:12]}"  
+        # create task id in advance
+        # to avoid two requests querying backend cache at the same time
+        # if not found request_key add immediately.
         claim = await self._idempotency.claim(
             request_key,
             proposed_task_id,
@@ -60,7 +63,8 @@ class EnqueueIntentUseCase:
             return EnqueueIntentResult(
                 task_id=claim.value,
                 created=False,
-            )
+            )  # return task_id if there is already same task in the backend stream. 
+        # The task will expire in a time set by the backend. 
 
         try:
             await self._conversation_store.touch_session(
@@ -71,6 +75,7 @@ class EnqueueIntentUseCase:
             )
         except Exception as error:
             await self._release_claim(request_key, claim.value)
+            # task not finished, release idempotency.
 
             if isinstance(error, ValueError):
                 raise SessionOwnershipError(str(error)) from error
